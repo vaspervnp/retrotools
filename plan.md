@@ -56,7 +56,8 @@ retrotools/
 ├─ src/
 │  ├─ RetroTools.Core/          # Domain: παλέτες, modes, codecs, validation. Χωρίς εξαρτήσεις.
 │  ├─ RetroTools.Data/          # EF Core: entities, DbContext, migrations, repositories
-│  └─ RetroTools.Web/           # MVC controllers + Views + Blazor components + wwwroot
+│  ├─ RetroTools.Web/           # MVC controllers + Views + Blazor components + wwwroot
+│  └─ RetroTools.Secrets/       # CLI ρύθμισης secrets, self-contained για server χωρίς SDK
 ├─ tests/
 │  ├─ RetroTools.Core.Tests/
 │  └─ RetroTools.Data.Tests/    # integration tests με MariaDB
@@ -509,6 +510,32 @@ query filter** πάνω στο `projects` (`p => p.OwnerId == _currentUser.Id ||
 Και τα τρία ζευγάρια πάνε **αποκλειστικά** σε user-secrets ή environment variables.
 Αν λείπουν τα OAuth κλειδιά, ο αντίστοιχος provider απλώς **δεν καταχωρείται** — η εφαρμογή
 σηκώνεται κανονικά και δείχνει μόνο τα διαθέσιμα κουμπιά σύνδεσης.
+
+### 6.1.1 Ρύθμιση σε server χωρίς SDK
+
+Το `dotnet user-secrets` είναι εντολή του **SDK**, που σε διακομιστή παραγωγής δεν
+υπάρχει — και αν η εφαρμογή τρέχει self-contained, ούτε καν το runtime.
+
+Το `RetroTools.Secrets` καλύπτει το κενό. Ο αποθηκευτικός χώρος των user-secrets δεν
+είναι κάτι εξωτικό: είναι ένα JSON αρχείο με επίπεδα κλειδιά, σε διαδρομή που ορίζει
+το λειτουργικό (`%APPDATA%\Microsoft\UserSecrets\<id>\` ή `~/.microsoft/usersecrets/<id>/`).
+Το εργαλείο γράφει **ακριβώς το ίδιο αρχείο**, οπότε τα δύο εργαλεία είναι εναλλάξιμα.
+
+Σχεδιαστικές αποφάσεις:
+
+| Απόφαση | Γιατί |
+|---|---|
+| Δημοσιεύεται **self-contained single file** | Ο server μπορεί να μην έχει καθόλου .NET· ένα εκτελέσιμο 37 MB αντιγράφεται και τρέχει |
+| Μόνο `MySqlConnector`, χωρίς EF Core | Το εργαλείο θέλει να ανοίξει μια σύνδεση, όχι να χαρτογραφήσει οντότητες |
+| `set` χωρίς τιμή διαβάζει από **stdin** | Ο κωδικός δεν μένει στο ιστορικό του shell |
+| Οι τιμές **κρύβονται** στην έξοδο | Η κονσόλα διακομιστή καταλήγει συχνά σε logs ή session recording |
+| `0600` στο αρχείο σε Unix | Χωρίς αυτό είναι αναγνώσιμο από κάθε λογαριασμό του μηχανήματος |
+| Το `import` **παραλείπει placeholders** | Ένα `Password=DB_PASSWORD` δεν πρέπει να γίνει ρύθμιση |
+| Έλεγχος OAuth **ανά ζεύγος** | Ένα ClientId χωρίς ClientSecret δεν είναι μισή ρύθμιση — ο provider σιωπηλά δεν εμφανίζεται |
+| Διακριτοί κωδικοί εξόδου (0/1/2) | Μπαίνει σε script εγκατάστασης |
+
+Το `test` δεν ελέγχει μόνο αν υπάρχει connection string αλλά **ανοίγει πραγματική
+σύνδεση**: λάθος κωδικός, κλειστό firewall ή λάθος όνομα βάσης φαίνονται μόνο έτσι.
 
 ### 6.2 Εγγυήσεις
 

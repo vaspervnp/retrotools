@@ -134,6 +134,54 @@ dotnet user-secrets set "Authentication:GitHub:ClientSecret" "YOUR_SECRET" --pro
 > (που είναι gitignored). Αν λείπει οποιοδήποτε από τα δύο, η διαδρομή επιστρέφει
 > **404** σαν να μην υπάρχει. Μην ενεργοποιήσεις ποτέ αυτή τη ρύθμιση σε server.
 
+### Ρύθμιση σε server χωρίς .NET SDK
+
+Το `dotnet user-secrets` είναι εντολή του **SDK**. Σε διακομιστή παραγωγής το SDK
+συνήθως δεν υπάρχει — και ενδεχομένως ούτε το runtime, αν η εφαρμογή τρέχει
+self-contained. Γι' αυτό υπάρχει το `retrotools-secrets`.
+
+Δημοσίευσέ το ως **ένα αυτοτελές αρχείο** (δεν χρειάζεται τίποτα εγκατεστημένο στον server):
+
+```bash
+dotnet publish src/RetroTools.Secrets -c Release -r linux-x64 -o ./secrets-tool
+```
+
+Για Windows βάλε `-r win-x64`. Αντέγραψε το ένα εκτελέσιμο στον server και:
+
+```bash
+./retrotools-secrets set "ConnectionStrings:RetroTools"
+```
+
+Χωρίς τιμή στη γραμμή εντολών, τη διαβάζει από το stdin — **έτσι ο κωδικός δεν μένει
+στο ιστορικό του shell**.
+
+| Εντολή | Τι κάνει |
+|---|---|
+| `path` | Πού βρίσκεται το αρχείο ρυθμίσεων |
+| `list` | Όλες οι ρυθμίσεις, με τις τιμές κρυμμένες (`--reveal` για ολόκληρες) |
+| `set <κλειδί> [τιμή]` | Ορισμός· χωρίς τιμή διαβάζει από stdin |
+| `remove <κλειδί>` / `clear --force` | Διαγραφή |
+| `import <αρχείο.json>` | Εισαγωγή από `appsettings.Local.json` — παραλείπει τα placeholders |
+| `export-env` | Γραμμές για systemd `EnvironmentFile` |
+| `check` | Λείπει υποχρεωτική ρύθμιση; Είναι μισο-ρυθμισμένος κάποιος OAuth provider; |
+| `test` | `check` **και πραγματική σύνδεση** στη MariaDB |
+
+Το `test` είναι το ουσιαστικό: το ότι υπάρχει connection string δεν σημαίνει ότι
+δουλεύει — λάθος κωδικός, κλειστό firewall ή λάθος όνομα βάσης φαίνονται μόνο έτσι.
+
+Κωδικοί εξόδου: `0` επιτυχία, `1` σφάλμα χρήσης, `2` λείπει ρύθμιση ή απέτυχε η
+σύνδεση — ώστε να μπαίνει σε script εγκατάστασης.
+
+Αν προτιμάς μεταβλητές περιβάλλοντος αντί για αρχείο:
+
+```bash
+./retrotools-secrets export-env > /etc/retrotools.env && chmod 600 /etc/retrotools.env
+```
+
+> Το εργαλείο γράφει **το ίδιο αρχείο** με το `dotnet user-secrets`, σε ίδια διαδρομή
+> και μορφή — τα δύο εργαλεία είναι εναλλάξιμα. Σε Linux περιορίζει τα δικαιώματα
+> του αρχείου σε `0600`.
+
 ### Δημιουργία σχήματος
 
 ```bash
@@ -183,12 +231,12 @@ Self-hosted ως service, πίσω από reverse proxy (nginx / Apache / IIS AR
 ```
 retrotools/
 ├─ src/
-│  ├─ RetroTools.Core/   # παλέτες, modes, codecs, validation — καθαρό domain, χωρίς εξαρτήσεις
-│  ├─ RetroTools.Data/   # EF Core entities, DbContext, migrations
-│  └─ RetroTools.Web/    # MVC controllers/views, REST API, Blazor editor, wwwroot
+│  ├─ RetroTools.Core/     # παλέτες, modes, codecs, PNG, export — καθαρό domain, χωρίς εξαρτήσεις
+│  ├─ RetroTools.Data/     # EF Core entities, DbContext, migrations
+│  ├─ RetroTools.Web/      # MVC controllers, REST API, Blazor editor, wwwroot
+│  └─ RetroTools.Secrets/  # CLI ρύθμισης secrets για server χωρίς SDK
 ├─ tests/
-├─ docs/
-├─ plan.md               # τεχνική μελέτη + roadmap
+├─ plan.md                 # τεχνική μελέτη + roadmap
 └─ README.md
 ```
 
