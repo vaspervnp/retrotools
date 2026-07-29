@@ -35,6 +35,9 @@ Web εργαλείο σχεδίασης **sprites** και **spritemaps** για
   spritemaps) σε ένα αρχείο `.retrotools.json` που μπαίνει σε git δίπλα στον κώδικα
   του παιχνιδιού και ξαναφορτώνεται όποτε θες.
 - **Multi-user** με σύνδεση GitHub / Google· κάθε project ανήκει στον χρήστη του.
+- **`retrotools-secrets`**: εργαλείο γραμμής εντολών που ρυθμίζει τα secrets σε server
+  **χωρίς εγκατεστημένο .NET** — ένα αυτοτελές εκτελέσιμο που δοκιμάζει και την
+  πραγματική σύνδεση στη βάση. Δες [Ρύθμιση σε server χωρίς .NET SDK](#ρύθμιση-σε-server-χωρίς-net-sdk).
 
 ## Υποστηριζόμενες πλατφόρμες — περίληψη
 
@@ -58,6 +61,8 @@ Web εργαλείο σχεδίασης **sprites** και **spritemaps** για
 - **Cookie auth + OAuth** (GitHub, Google) — χωρίς ASP.NET Identity
 - **xUnit** για tests
 - Self-hosted ως **Windows Service / systemd**, πίσω από reverse proxy
+- `retrotools-secrets`: αυτοτελές CLI (self-contained single file) για ρύθμιση σε
+  server χωρίς .NET
 
 > ⚠ Τα πακέτα EF Core είναι **καρφωμένα στο 9.0.x**. Το Pomelo δεν έχει build για EF Core 10·
 > αναβάθμιση θα σπάσει τον provider στο runtime. Δες [plan.md §2](plan.md).
@@ -208,7 +213,36 @@ connection string — δεν αποτυγχάνουν σε CI χωρίς secrets
 ## Deployment
 
 Self-hosted ως service, πίσω από reverse proxy (nginx / Apache / IIS ARR / Caddy).
-Οι σχετικές ρυθμίσεις είναι στο section `RetroTools` του `appsettings`:
+
+### Σειρά βημάτων στον server
+
+1. **Δημοσίευσε την εφαρμογή** και το εργαλείο secrets:
+   ```bash
+   dotnet publish src/RetroTools.Web -c Release -r linux-x64 --self-contained -o ./publish
+   ```
+   ```bash
+   dotnet publish src/RetroTools.Secrets -c Release -r linux-x64 -o ./publish
+   ```
+2. **Ρύθμισε τα secrets** με το `retrotools-secrets` — δεν χρειάζεται .NET SDK στον server:
+   ```bash
+   ./retrotools-secrets set "ConnectionStrings:RetroTools"
+   ```
+3. **Επιβεβαίωσε πριν ξεκινήσεις την υπηρεσία**:
+   ```bash
+   ./retrotools-secrets test
+   ```
+   Επιστρέφει `0` μόνο αν όλες οι υποχρεωτικές ρυθμίσεις υπάρχουν **και** η βάση
+   απαντά — οπότε μπαίνει σε script εγκατάστασης ως προϋπόθεση.
+4. **Εφάρμοσε τα migrations** από μηχάνημα που έχει SDK (δες παρακάτω).
+5. **Στήσε την υπηρεσία** και τον reverse proxy με τις ρυθμίσεις του πίνακα.
+
+> Τα migrations θέλουν `dotnet ef`, δηλαδή SDK. Τρέξ' τα από τον υπολογιστή ανάπτυξης
+> στοχεύοντας τη βάση παραγωγής, ή παρήγαγε script με
+> `dotnet ef migrations script --idempotent` και δώσ' το στον διαχειριστή της βάσης.
+
+### Ρυθμίσεις φιλοξενίας
+
+Στο section `RetroTools` του `appsettings`:
 
 | Ρύθμιση | Τι κάνει |
 |---|---|
@@ -258,6 +292,24 @@ secrets/
 
 Αν χρειαστεί να προστεθεί νέα ρύθμιση με μυστικό, πηγαίνει σε user-secrets ή env var —
 ποτέ σε committed αρχείο. Τα committed `*.example` αρχεία περιέχουν **μόνο placeholders**.
+
+### Διαχείριση των secrets
+
+| Περιβάλλον | Τρόπος |
+|---|---|
+| Development με SDK | `dotnet user-secrets set …` |
+| Server **χωρίς SDK** | `retrotools-secrets set …` — [οδηγίες](#ρύθμιση-σε-server-χωρίς-net-sdk) |
+| Container / systemd | Μεταβλητές περιβάλλοντος· `retrotools-secrets export-env` τις παράγει |
+
+Και τα δύο εργαλεία γράφουν **το ίδιο αρχείο**, σε ίδια διαδρομή και μορφή, οπότε
+είναι εναλλάξιμα.
+
+> Να ξέρεις ότι **ο user-secrets store δεν είναι κρυπτογραφημένος** — ούτε από το SDK.
+> Η προστασία είναι ότι το αρχείο ζει έξω από τον φάκελο του project (άρα δεν μπαίνει
+> σε git) και ότι τα δικαιώματά του περιορίζονται στον ιδιοκτήτη. Το `retrotools-secrets`
+> επιβάλλει `0600` σε Unix· χωρίς αυτό το αρχείο είναι αναγνώσιμο από κάθε λογαριασμό
+> του μηχανήματος. Αν χρειάζεσαι πραγματική κρυπτογράφηση σε ηρεμία, χρησιμοποίησε
+> κάτι σαν Vault ή τα secrets του λειτουργικού και πέρασέ τα ως μεταβλητές περιβάλλοντος.
 
 ---
 
