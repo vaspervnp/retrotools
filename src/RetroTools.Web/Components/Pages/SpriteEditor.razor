@@ -1,0 +1,790 @@
+@page "/editor/sprite/{SpriteId:long}"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using RetroTools.Core.Export
+@using RetroTools.Core.Model
+@using RetroTools.Core.Palettes
+@using RetroTools.Core.Platforms
+@using RetroTools.Core.Serialization
+@using RetroTools.Data
+@using RetroTools.Data.Entities
+@using RetroTools.Web.Services
+@attribute [Authorize]
+@inherits AuthenticatedPageBase
+@implements IAsyncDisposable
+@inject EditorDataService Data
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(_sprite?.Name ?? "Editor") — RetroTools</PageTitle>
+
+@if (_sprite == null)
+{
+    <p class="text-secondary">Φόρτωση…</p>
+}
+else
+{
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/projects">Projects</a></li>
+            <li class="breadcrumb-item"><a href="@($"/projects/{_sprite.ProjectId}")">@_projectName</a></li>
+            <li class="breadcrumb-item active">@_sprite.Name</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <h1 class="h3 mb-0">@_sprite.Name</h1>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge text-bg-secondary">@_mode!.Name</span>
+            <span class="badge text-bg-light">@_sprite.WidthPx×@_sprite.HeightPx</span>
+            @if (_dirty)
+            {
+                <span class="badge text-bg-warning">Μη αποθηκευμένο</span>
+            }
+            else
+            {
+                <span class="badge text-bg-success">Αποθηκευμένο</span>
+            }
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-3 order-lg-1">
+            <div class="card mb-3">
+                <div class="card-header py-2">Εργαλεία</div>
+                <div class="card-body py-2">
+                    <div class="btn-group-vertical w-100" role="group">
+                        @foreach (var tool in Tools)
+                        {
+                            <button type="button"
+                                    class="btn btn-sm @(tool.Key == _tool ? "btn-primary" : "btn-outline-secondary")"
+                                    @onclick="() => SetToolAsync(tool.Key)">
+                                @tool.Value
+                            </button>
+                        }
+                    </div>
+
+                    <hr />
+
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm btn-outline-secondary flex-fill" @onclick="UndoAsync"
+                                disabled="@(!_undo.CanUndo)" title="Αναίρεση">↶ Αναίρεση</button>
+                        <button class="btn btn-sm btn-outline-secondary flex-fill" @onclick="RedoAsync"
+                                disabled="@(!_undo.CanRedo)" title="Επανάληψη">↷ Επανάληψη</button>
+                    </div>
+
+                    <hr />
+
+                    <label class="form-label small mb-1">Ζουμ: @_zoom×</label>
+                    <input type="range" class="form-range" min="2" max="32" step="1"
+                           value="@_zoom" @onchange="OnZoomChanged" />
+
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="grid-pixel"
+                               checked="@_pixelGrid" @onchange="OnPixelGridChanged" />
+                        <label class="form-check-label small" for="grid-pixel">Πλέγμα pixel</label>
+                    </div>
+
+                    @if (_mode.CellWidth > 0)
+                    {
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="grid-cell"
+                                   checked="@_cellGrid" @onchange="OnCellGridChanged" />
+                            <label class="form-check-label small" for="grid-cell">
+                                Πλέγμα κελιών @_mode.CellWidth×@_mode.CellHeight
+                            </label>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header py-2">Παλέτα</div>
+                <div class="card-body py-2">
+                    @for (var slot = 0; slot < _slotColors.Length; slot++)
+                    {
+                        var index = slot;
+                        var pixelSlot = _mode.PixelSlots[index];
+                        var isTransparent = pixelSlot.Role == PixelSlotRole.Transparent;
+
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <button type="button"
+                                    class="btn btn-sm p-0 border @(index == _colorIndex ? "border-primary border-3" : "border-secondary")"
+                                    style="width:2rem;height:1.75rem;background:@SlotCss(index)"
+                                    title="@pixelSlot.Name"
+                                    @onclick="() => SelectColorAsync(index)"></button>
+
+                            <div class="flex-grow-1 small">
+                                <div>
+                                    @pixelSlot.Name
+                                    @if (pixelSlot.IsGlobal)
+                                    {
+                                        <span class="badge text-bg-warning ms-1" title="Κοινός καταχωρητής: η αλλαγή επηρεάζει όλα τα sprites">κοινό</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrEmpty(pixelSlot.HardwareRegister))
+                                {
+                                    <code class="text-secondary">@pixelSlot.HardwareRegister</code>
+                                }
+                            </div>
+
+                            @if (!isTransparent)
+                            {
+                                <select class="form-select form-select-sm" style="width:9rem"
+                                        value="@_slotColors[index]"
+                                        @onchange="e => ChangeSlotColorAsync(index, e)">
+                                    @foreach (var color in _platform!.Palette.Colors)
+                                    {
+                                        <option value="@color.Index">@color.Index — @color.Name</option>
+                                    }
+                                </select>
+                            }
+                        </div>
+                    }
+
+                    @if (_mode.SharedSlots.Count > 0)
+                    {
+                        <div class="alert alert-warning small mt-2 mb-0 py-2">
+                            Τα σημειωμένα ως <strong>κοινό</strong> είναι καταχωρητές που μοιράζονται
+                            όλα τα sprites της οθόνης — αλλάζοντάς τα εδώ αλλάζουν παντού.
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-9 order-lg-0">
+            <div class="card">
+                <div class="card-body">
+                    <div class="editor-canvas-wrap">
+                        <canvas @ref="_canvas" class="editor-canvas"></canvas>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-2 small text-secondary">
+                        <span>
+                            @if (_cursorX >= 0)
+                            {
+                                <text>x: @_cursorX, y: @_cursorY</text>
+                            }
+                            else
+                            {
+                                <text>&nbsp;</text>
+                            }
+                        </span>
+                        <span>Αναλογία pixel @_mode.PixelAspect.Width:@_mode.PixelAspect.Height · @_undo.Depth βήματα ιστορικού</span>
+                    </div>
+
+                    @if (_warnings.Count > 0)
+                    {
+                        <div class="alert alert-warning mt-2 mb-0 py-2 small">
+                            @foreach (var warning in _warnings)
+                            {
+                                <div>⚠ @warning</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header py-2">Εξαγωγή</div>
+                <div class="card-body py-2">
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        @foreach (var exporter in _exporters)
+                        {
+                            <a class="btn btn-sm btn-outline-secondary"
+                               href="@ExportUrl(exporter.FormatId)"
+                               download>
+                                @exporter.DisplayName
+                            </a>
+                        }
+                    </div>
+
+                    @if (_sprite.HasMask)
+                    {
+                        <div class="form-check form-switch mt-2">
+                            <input class="form-check-input" type="checkbox" id="export-mask"
+                                   checked="@_exportMask" @onchange="e => _exportMask = e.Value is bool b && b" />
+                            <label class="form-check-label small" for="export-mask">
+                                Συμπερίληψη μάσκας (δεδομένα + AND-mask ανά καρέ)
+                            </label>
+                        </div>
+                    }
+
+                    <div class="form-text">
+                        Η εξαγωγή περιλαμβάνει και τα @_frames.Count καρέ, το ένα μετά το άλλο.
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header py-2 d-flex justify-content-between align-items-center">
+                    <span>Καρέ</span>
+                    <div class="btn-group btn-group-sm">
+                        <button class="btn btn-outline-secondary" @onclick="AddFrameAsync">+ Νέο καρέ</button>
+                        <button class="btn btn-outline-danger" @onclick="DeleteFrameAsync"
+                                disabled="@(_frames.Count <= 1)">Διαγραφή καρέ</button>
+                    </div>
+                </div>
+                <div class="card-body py-2 d-flex gap-2 flex-wrap">
+                    @for (var i = 0; i < _frames.Count; i++)
+                    {
+                        var index = i;
+                        <button type="button"
+                                class="btn btn-sm @(index == _frameIndex ? "btn-primary" : "btn-outline-secondary")"
+                                @onclick="() => SelectFrameAsync(index)">
+                            @(index + 1)
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly Dictionary<string, string> Tools = new Dictionary<string, string>
+    {
+        ["pencil"] = "✏ Μολύβι",
+        ["eraser"] = "◻ Σβήσιμο",
+        ["fill"] = "🪣 Γέμισμα",
+        ["line"] = "／ Γραμμή",
+        ["rect"] = "▭ Ορθογώνιο",
+        ["rectFilled"] = "▬ Γεμάτο ορθογώνιο",
+        ["picker"] = "⌖ Επιλογή χρώματος",
+    };
+
+    /// <summary>Το slot διαφάνειας δεν έχει χρώμα υλικού — δείχνεται ουδέτερα σκούρο.</summary>
+    private const string TransparentCss = "#1b1b24";
+
+    [Parameter]
+    public long SpriteId { get; set; }
+
+    private ElementReference _canvas;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<SpriteEditor>? _selfRef;
+    private readonly string _editorId = Guid.NewGuid().ToString("N");
+
+    private Sprite? _sprite;
+    private string _projectName = string.Empty;
+    private PlatformDefinition? _platform;
+    private GraphicsMode? _mode;
+    private Palette? _palette;
+
+    private List<SpriteFrame> _frames = new List<SpriteFrame>();
+    private int _frameIndex;
+    private byte[] _pixels = Array.Empty<byte>();
+    private int[] _slotColors = Array.Empty<int>();
+
+    private readonly UndoStack _undo = new UndoStack();
+    private string _tool = "pencil";
+    private int _colorIndex = 1;
+    private int _zoom = 12;
+    private bool _pixelGrid = true;
+    private bool _cellGrid = true;
+    private int _cursorX = -1;
+    private int _cursorY = -1;
+
+    private bool _dirty;
+    private CancellationTokenSource? _autosave;
+    private List<string> _warnings = new List<string>();
+    private IReadOnlyList<ISpriteExporter> _exporters = Array.Empty<ISpriteExporter>();
+    private bool _exportMask = true;
+
+    /// <summary>
+    /// Η εξαγωγή σώζει πρώτα ό,τι εκκρεμεί, αλλιώς ο χρήστης θα κατέβαζε την
+    /// προηγούμενη έκδοση του sprite χωρίς να το καταλάβει.
+    /// </summary>
+    private string ExportUrl(string formatId)
+    {
+        return "/api/export/sprite/" + SpriteId +
+               "?format=" + formatId +
+               "&includeMask=" + (_exportMask ? "true" : "false") +
+               "&scale=4";
+    }
+
+    protected override async Task OnAuthenticatedInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private bool _canvasInitialising;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // ΔΕΝ αρκεί ο έλεγχος firstRender: η πρώτη απόδοση συμβαίνει ενώ το
+        // OnInitializedAsync φορτώνει ακόμη, οπότε τότε δεν υπάρχει ούτε sprite
+        // ούτε canvas στο DOM. Αρχικοποιούμε στην πρώτη απόδοση όπου υπάρχουν και τα δύο.
+        if (_sprite == null || _module != null || _canvasInitialising)
+        {
+            return;
+        }
+
+        _canvasInitialising = true;
+
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/pixel-canvas.js");
+        _selfRef = DotNetObjectReference.Create(this);
+
+        await _module.InvokeVoidAsync("create", _editorId, _canvas, _selfRef, new
+        {
+            width = _sprite.WidthPx,
+            height = _sprite.HeightPx,
+            aspectWidth = _mode!.PixelAspect.Width,
+            aspectHeight = _mode.PixelAspect.Height,
+            cellWidth = _mode.CellWidth,
+            cellHeight = _mode.CellHeight,
+            zoom = _zoom,
+            palette = BuildCssPalette(),
+        });
+
+        await PushPixelsToCanvasAsync();
+        _canvasInitialising = false;
+    }
+
+    // --- Φόρτωση -------------------------------------------------------------
+
+    private async Task LoadAsync()
+    {
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        _sprite = await context.Sprites
+            .Include(s => s.Frames)
+            .Include(s => s.Project)
+            .SingleOrDefaultAsync(s => s.Id == SpriteId && s.Project!.OwnerId == CurrentUserId!.Value);
+
+        if (_sprite?.Project == null)
+        {
+            Navigation.NavigateTo("/projects");
+            return;
+        }
+
+        _projectName = _sprite.Project.Name;
+        _platform = PlatformCatalog.Get(_sprite.Project.PlatformCode);
+        _mode = PlatformCatalog.GetMode(_sprite.Project.ModeCode);
+        _frames = _sprite.Frames.OrderBy(f => f.FrameIndex).ToList();
+
+        await LoadPaletteAsync(context);
+
+        _exporters = SpriteExporters.For(_mode);
+        _colorIndex = Math.Min(1, _mode.MaxPixelValue);
+        LoadFrame(0);
+    }
+
+    private async Task LoadPaletteAsync(RetroToolsDbContext context)
+    {
+        _palette = await context.Palettes
+            .Include(p => p.Entries)
+            .FirstOrDefaultAsync(p => p.ProjectId == _sprite!.ProjectId);
+
+        if (_palette == null)
+        {
+            var defaults = DefaultPalettes.For(_mode!);
+
+            _palette = new Palette
+            {
+                ProjectId = _sprite!.ProjectId,
+                Name = "Κύρια",
+            };
+
+            for (var slot = 0; slot < defaults.Count; slot++)
+            {
+                _palette.Entries.Add(new PaletteEntry
+                {
+                    SlotIndex = slot,
+                    HardwareColorIndex = defaults[slot],
+                    Role = (int)_mode!.PixelSlots[slot].Role,
+                });
+            }
+
+            context.Palettes.Add(_palette);
+            await context.SaveChangesAsync();
+        }
+
+        _slotColors = new int[_mode!.MaxPixelValue + 1];
+
+        foreach (var entry in _palette.Entries)
+        {
+            if (entry.SlotIndex >= 0 && entry.SlotIndex < _slotColors.Length)
+            {
+                _slotColors[entry.SlotIndex] = entry.HardwareColorIndex;
+            }
+        }
+    }
+
+    private void LoadFrame(int index)
+    {
+        _frameIndex = Math.Clamp(index, 0, _frames.Count - 1);
+        _pixels = RsprContainer.Read(_frames[_frameIndex].PixelData).ToArray();
+        _undo.Clear();
+        Validate();
+    }
+
+    // --- Παλέτα → CSS --------------------------------------------------------
+
+    private string[] BuildCssPalette()
+    {
+        var profile = _platform!.Palette.GetProfile(_sprite!.Project!.PaletteProfileId);
+        var css = new string[_slotColors.Length];
+
+        for (var slot = 0; slot < css.Length; slot++)
+        {
+            css[slot] = _mode!.PixelSlots[slot].Role == PixelSlotRole.Transparent
+                ? TransparentCss
+                : profile[_slotColors[slot]].ToHex();
+        }
+
+        return css;
+    }
+
+    private string SlotCss(int slot)
+    {
+        return BuildCssPalette()[slot];
+    }
+
+    // --- Χειρισμοί από το JS -------------------------------------------------
+
+    /// <summary>
+    /// Οι τιμές έρχονται ως <c>int[]</c> και όχι <c>byte[]</c> επίτηδες: ο Blazor
+    /// μεταχειρίζεται τα byte arrays ειδικά στο JS→.NET interop (περιμένει αναφορά
+    /// σε μεταφορά δυαδικών δεδομένων), οπότε ένα απλό array αριθμών από JavaScript
+    /// αποτυγχάνει σιωπηλά στην αποσειριοποίηση.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnStrokeCommitted(int[] indices, int[] values, int[] previous)
+    {
+        var command = new StrokeCommand(
+            indices,
+            Array.ConvertAll(values, v => (byte)v),
+            Array.ConvertAll(previous, v => (byte)v));
+        command.Apply(_pixels);
+        _undo.Push(command);
+
+        MarkDirty();
+        Validate();
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task OnColorPicked(int index)
+    {
+        _colorIndex = index;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task OnCursorMoved(int x, int y)
+    {
+        // Χωρίς StateHasChanged ανά κίνηση: η θέση δείκτη δεν αξίζει render του κυκλώματος.
+        _cursorX = x;
+        _cursorY = y;
+        return Task.CompletedTask;
+    }
+
+    // --- Ενέργειες UI --------------------------------------------------------
+
+    private async Task SetToolAsync(string tool)
+    {
+        _tool = tool;
+
+        if (_module != null)
+        {
+            await _module.InvokeVoidAsync("setTool", _editorId, tool);
+        }
+    }
+
+    private async Task SelectColorAsync(int index)
+    {
+        _colorIndex = index;
+
+        if (_module != null)
+        {
+            await _module.InvokeVoidAsync("setColorIndex", _editorId, index);
+        }
+    }
+
+    private async Task ChangeSlotColorAsync(int slot, ChangeEventArgs args)
+    {
+        if (!int.TryParse(args.Value?.ToString(), out var colorIndex))
+        {
+            return;
+        }
+
+        _slotColors[slot] = colorIndex;
+
+        await using (var context = Data.CreateContext(CurrentUserId))
+        {
+            var entry = await context.PaletteEntries
+                .SingleOrDefaultAsync(e => e.PaletteId == _palette!.Id && e.SlotIndex == slot);
+
+            if (entry != null)
+            {
+                entry.HardwareColorIndex = colorIndex;
+                await context.SaveChangesAsync();
+            }
+        }
+
+        // Αλλάζει μόνο ο πίνακας χρωμάτων· τα pixel δεδομένα μένουν άθικτα.
+        if (_module != null)
+        {
+            await _module.InvokeVoidAsync("setPalette", _editorId, BuildCssPalette());
+        }
+    }
+
+    private async Task OnZoomChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var zoom))
+        {
+            _zoom = zoom;
+
+            if (_module != null)
+            {
+                await _module.InvokeVoidAsync("setZoom", _editorId, zoom);
+            }
+        }
+    }
+
+    private async Task OnPixelGridChanged(ChangeEventArgs args)
+    {
+        _pixelGrid = args.Value is bool value && value;
+        await UpdateGridAsync();
+    }
+
+    private async Task OnCellGridChanged(ChangeEventArgs args)
+    {
+        _cellGrid = args.Value is bool value && value;
+        await UpdateGridAsync();
+    }
+
+    private async Task UpdateGridAsync()
+    {
+        if (_module != null)
+        {
+            await _module.InvokeVoidAsync("setGrid", _editorId, _pixelGrid, _cellGrid);
+        }
+    }
+
+    private async Task UndoAsync()
+    {
+        var command = _undo.Undo();
+
+        if (command == null)
+        {
+            return;
+        }
+
+        command.Revert(_pixels);
+        await PushPixelsToCanvasAsync();
+        MarkDirty();
+        Validate();
+    }
+
+    private async Task RedoAsync()
+    {
+        var command = _undo.Redo();
+
+        if (command == null)
+        {
+            return;
+        }
+
+        command.Apply(_pixels);
+        await PushPixelsToCanvasAsync();
+        MarkDirty();
+        Validate();
+    }
+
+    private async Task SelectFrameAsync(int index)
+    {
+        await SaveAsync();
+        LoadFrame(index);
+        await PushPixelsToCanvasAsync();
+    }
+
+    private async Task AddFrameAsync()
+    {
+        await SaveAsync();
+
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        var frame = new SpriteFrame
+        {
+            SpriteId = SpriteId,
+            FrameIndex = _frames.Max(f => f.FrameIndex) + 1,
+            PixelData = RsprContainer.Write(new FrameBuffer(_sprite!.WidthPx, _sprite.HeightPx)),
+        };
+
+        context.SpriteFrames.Add(frame);
+        await context.SaveChangesAsync();
+
+        _frames.Add(frame);
+        LoadFrame(_frames.Count - 1);
+        await PushPixelsToCanvasAsync();
+    }
+
+    private async Task DeleteFrameAsync()
+    {
+        if (_frames.Count <= 1)
+        {
+            return;
+        }
+
+        var frame = _frames[_frameIndex];
+
+        await using (var context = Data.CreateContext(CurrentUserId))
+        {
+            var tracked = await context.SpriteFrames.SingleOrDefaultAsync(f => f.Id == frame.Id);
+
+            if (tracked != null)
+            {
+                context.SpriteFrames.Remove(tracked);
+                await context.SaveChangesAsync();
+            }
+        }
+
+        _frames.RemoveAt(_frameIndex);
+        _dirty = false;
+        LoadFrame(Math.Max(0, _frameIndex - 1));
+        await PushPixelsToCanvasAsync();
+    }
+
+    private async Task PushPixelsToCanvasAsync()
+    {
+        if (_module != null)
+        {
+            await _module.InvokeVoidAsync("setPixels", _editorId, Convert.ToBase64String(_pixels));
+        }
+    }
+
+    // --- Αποθήκευση ----------------------------------------------------------
+
+    private void MarkDirty()
+    {
+        _dirty = true;
+        ScheduleAutosave();
+    }
+
+    /// <summary>
+    /// Αποθήκευση 1,5 δευτερόλεπτο μετά την τελευταία πινελιά. Κάθε νέα πινελιά
+    /// ακυρώνει την προηγούμενη προγραμματισμένη αποθήκευση, ώστε μια συνεχής
+    /// σειρά κινήσεων να καταλήγει σε ένα γράψιμο και όχι σε δεκάδες.
+    /// </summary>
+    private void ScheduleAutosave()
+    {
+        _autosave?.Cancel();
+        _autosave?.Dispose();
+        _autosave = new CancellationTokenSource();
+
+        var token = _autosave.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(1.5), token);
+                await InvokeAsync(async () =>
+                {
+                    await SaveAsync();
+                    StateHasChanged();
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                // Ήρθε νέα πινελιά — η αποθήκευση αναβάλλεται.
+            }
+        });
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!_dirty || _sprite == null)
+        {
+            return;
+        }
+
+        var frame = _frames[_frameIndex];
+        var data = RsprContainer.Write(FrameBuffer.FromPixels(_sprite.WidthPx, _sprite.HeightPx, _pixels));
+
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        var tracked = await context.SpriteFrames.SingleOrDefaultAsync(f => f.Id == frame.Id);
+
+        if (tracked == null)
+        {
+            return;
+        }
+
+        tracked.PixelData = data;
+        frame.PixelData = data;
+
+        await context.SaveChangesAsync();
+
+        _dirty = false;
+    }
+
+    // --- Έλεγχοι πλατφόρμας --------------------------------------------------
+
+    /// <summary>
+    /// Ζωντανός εντοπισμός παραβιάσεων που μπορεί να προκύψουν από τη σχεδίαση.
+    /// </summary>
+    /// <remarks>
+    /// <b>Δεν ελέγχεται attribute clash</b>, και αυτό δεν είναι παράλειψη: σε per-cell
+    /// modes το indexed buffer κρατά ακριβώς <c>MaxColorsPerCell</c> δυνατές τιμές
+    /// (0 = PAPER, 1 = INK στο Spectrum). Ένα κελί <b>δεν μπορεί</b> να αποκτήσει
+    /// τρίτο χρώμα — το μοντέλο το αποκλείει εξ ορισμού. Ένας τέτοιος έλεγχος εδώ
+    /// δεν θα ενεργοποιούνταν ποτέ και θα έδινε ψεύτικη αίσθηση επαγρύπνησης.
+    /// Η πραγματική απώλεια χρωμάτων συμβαίνει στην <b>εισαγωγή εικόνας</b>, και
+    /// αναφέρεται εκεί από τον <c>ImageQuantizer</c>.
+    /// </remarks>
+    private void Validate()
+    {
+        _warnings = new List<string>();
+
+        if (_mode == null || _sprite == null)
+        {
+            return;
+        }
+
+        // Οι τιμές pixel εκτός ορίων δεν πρέπει να υπάρχουν — αν εμφανιστούν, κάτι
+        // τα έγραψε παρακάμπτοντας τους ελέγχους (π.χ. χειροκίνητη αλλαγή mode).
+        var max = _pixels.Length == 0 ? 0 : _pixels.Max();
+
+        if (max > _mode.MaxPixelValue)
+        {
+            _warnings.Add(
+                "Το καρέ περιέχει τιμή " + max + " ενώ το " + _mode.Name +
+                " επιτρέπει έως " + _mode.MaxPixelValue + ". Το export θα απορριφθεί.");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _autosave?.Cancel();
+        _autosave?.Dispose();
+
+        try
+        {
+            await SaveAsync();
+        }
+        catch (Exception)
+        {
+            // Το κύκλωμα μπορεί να έχει ήδη κλείσει· δεν υπάρχει πού να αναφερθεί.
+        }
+
+        if (_module != null)
+        {
+            try
+            {
+                await _module.InvokeVoidAsync("destroy", _editorId);
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // Ο browser έφυγε πρώτος — αναμενόμενο στο κλείσιμο καρτέλας.
+            }
+        }
+
+        _selfRef?.Dispose();
+    }
+}

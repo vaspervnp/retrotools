@@ -1,0 +1,385 @@
+@page "/editor/spritemap/{SpriteMapId:long}"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using RetroTools.Core.Palettes
+@using RetroTools.Core.Platforms
+@using RetroTools.Data
+@using RetroTools.Data.Entities
+@using RetroTools.Web.Services
+@attribute [Authorize]
+@inherits AuthenticatedPageBase
+@inject EditorDataService Data
+@inject SpritePreviewService Previews
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(_map?.Name ?? "Spritemap") — RetroTools</PageTitle>
+
+@if (_map == null)
+{
+    <p class="text-secondary">Φόρτωση…</p>
+}
+else
+{
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/projects">Projects</a></li>
+            <li class="breadcrumb-item"><a href="@($"/projects/{_map.ProjectId}")">@_projectName</a></li>
+            <li class="breadcrumb-item active">@_map.Name</li>
+        </ol>
+    </nav>
+
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <h1 class="h3 mb-0">@_map.Name</h1>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge text-bg-secondary">@_map.Columns × @_map.Rows κελιά</span>
+            @if (_dirty)
+            {
+                <span class="badge text-bg-warning">Μη αποθηκευμένο</span>
+            }
+            <button class="btn btn-sm btn-primary" @onclick="SaveAsync" disabled="@(!_dirty)">Αποθήκευση</button>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-lg-3">
+            <div class="card mb-3">
+                <div class="card-header py-2">Πλέγμα</div>
+                <div class="card-body py-2">
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label small mb-0" for="cols">Στήλες</label>
+                            <input id="cols" type="number" class="form-control form-control-sm"
+                                   value="@_map.Columns" @onchange="OnColumnsChanged" min="1" max="64" />
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small mb-0" for="rows">Γραμμές</label>
+                            <input id="rows" type="number" class="form-control form-control-sm"
+                                   value="@_map.Rows" @onchange="OnRowsChanged" min="1" max="64" />
+                        </div>
+                    </div>
+
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" id="flip-h"
+                               checked="@_flipH" @onchange="e => _flipH = e.Value is bool b && b" />
+                        <label class="form-check-label small" for="flip-h">Οριζόντια αναστροφή</label>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="flip-v"
+                               checked="@_flipV" @onchange="e => _flipV = e.Value is bool b && b" />
+                        <label class="form-check-label small" for="flip-v">Κατακόρυφη αναστροφή</label>
+                    </div>
+
+                    <div class="form-text mt-2">
+                        Διάλεξε sprite και μετά κάνε κλικ σε κελί. Δεξί κλικ αδειάζει το κελί.
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header py-2">Sprites</div>
+                <div class="card-body py-2" style="max-height:26rem;overflow:auto">
+                    @if (_sprites.Count == 0)
+                    {
+                        <p class="small text-secondary mb-0">Το project δεν έχει sprites.</p>
+                    }
+                    else
+                    {
+                        @foreach (var group in _sprites.GroupBy(s => s.GroupId))
+                        {
+                            <div class="small text-secondary mt-2">
+                                @(_groupNames.TryGetValue(group.Key ?? 0, out var name) ? name : "Χωρίς ομάδα")
+                            </div>
+
+                            @foreach (var sprite in group)
+                            {
+                                var current = sprite;
+                                <button type="button"
+                                        class="btn btn-sm w-100 text-start d-flex align-items-center gap-2 mb-1 @(_selectedSpriteId == current.Id ? "btn-primary" : "btn-outline-secondary")"
+                                        @onclick="() => _selectedSpriteId = current.Id">
+                                    <img src="@Thumbnail(current)" alt="" class="sprite-thumb" />
+                                    <span class="text-truncate">@current.Name</span>
+                                </button>
+                            }
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-9">
+            <div class="card">
+                <div class="card-body">
+                    <div class="spritemap-grid"
+                         style="grid-template-columns: repeat(@_map.Columns, minmax(0, 1fr))">
+                        @for (var row = 0; row < _map.Rows; row++)
+                        {
+                            for (var column = 0; column < _map.Columns; column++)
+                            {
+                                var c = column;
+                                var r = row;
+                                var cell = FindCell(c, r);
+
+                                <div class="spritemap-cell @(cell?.SpriteId != null ? "filled" : string.Empty)"
+                                     @onclick="() => AssignAsync(c, r)"
+                                     @oncontextmenu:preventDefault="true"
+                                     @oncontextmenu="() => Clear(c, r)"
+                                     title="@($"{c},{r}")">
+                                    @if (cell?.SpriteId != null && _spritesById.TryGetValue(cell.SpriteId.Value, out var sprite))
+                                    {
+                                        <img src="@Thumbnail(sprite)" alt="@sprite.Name"
+                                             style="@FlipStyle(cell)" />
+                                    }
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public long SpriteMapId { get; set; }
+
+    private SpriteMap? _map;
+    private string _projectName = string.Empty;
+    private PlatformDefinition? _platform;
+    private GraphicsMode? _mode;
+    private string? _profileId;
+    private int[] _slotColors = Array.Empty<int>();
+
+    private List<Sprite> _sprites = new List<Sprite>();
+    private Dictionary<long, Sprite> _spritesById = new Dictionary<long, Sprite>();
+    private Dictionary<long, string> _groupNames = new Dictionary<long, string>();
+    private readonly Dictionary<long, string> _thumbnailCache = new Dictionary<long, string>();
+
+    private List<SpriteMapCell> _cells = new List<SpriteMapCell>();
+    private long? _selectedSpriteId;
+    private bool _flipH;
+    private bool _flipV;
+    private bool _dirty;
+
+    protected override async Task OnAuthenticatedInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        _map = await context.SpriteMaps
+            .AsNoTracking()
+            .Include(m => m.Cells)
+            .Include(m => m.Project)
+            .SingleOrDefaultAsync(m => m.Id == SpriteMapId && m.Project!.OwnerId == CurrentUserId!.Value);
+
+        if (_map?.Project == null)
+        {
+            Navigation.NavigateTo("/projects");
+            return;
+        }
+
+        _projectName = _map.Project.Name;
+        _profileId = _map.Project.PaletteProfileId;
+        _platform = PlatformCatalog.Get(_map.Project.PlatformCode);
+        _mode = PlatformCatalog.GetMode(_map.Project.ModeCode);
+        _cells = _map.Cells.ToList();
+
+        _sprites = await context.Sprites
+            .AsNoTracking()
+            .Include(s => s.Frames)
+            .Where(s => s.ProjectId == _map.ProjectId)
+            .OrderBy(s => s.SortOrder).ThenBy(s => s.Id)
+            .ToListAsync();
+
+        _spritesById = _sprites.ToDictionary(s => s.Id);
+        _selectedSpriteId = _sprites.FirstOrDefault()?.Id;
+
+        _groupNames = await context.SpriteGroups
+            .AsNoTracking()
+            .Where(g => g.ProjectId == _map.ProjectId)
+            .ToDictionaryAsync(g => g.Id, g => g.Name);
+
+        var palette = await context.Palettes
+            .AsNoTracking()
+            .Include(p => p.Entries)
+            .FirstOrDefaultAsync(p => p.ProjectId == _map.ProjectId);
+
+        _slotColors = new int[_mode.MaxPixelValue + 1];
+        var defaults = DefaultPalettes.For(_mode);
+
+        for (var slot = 0; slot < _slotColors.Length; slot++)
+        {
+            _slotColors[slot] = defaults[slot];
+        }
+
+        if (palette != null)
+        {
+            foreach (var entry in palette.Entries.Where(e => e.SlotIndex < _slotColors.Length))
+            {
+                _slotColors[entry.SlotIndex] = entry.HardwareColorIndex;
+            }
+        }
+    }
+
+    // --- Μικρογραφίες --------------------------------------------------------
+
+    private string Thumbnail(Sprite sprite)
+    {
+        // Οι μικρογραφίες είναι ακριβές (συμπίεση PNG ανά sprite) και δεν αλλάζουν
+        // όσο είμαστε στη σελίδα, οπότε υπολογίζονται μία φορά.
+        if (_thumbnailCache.TryGetValue(sprite.Id, out var cached))
+        {
+            return cached;
+        }
+
+        var frame = sprite.Frames.OrderBy(f => f.FrameIndex).FirstOrDefault();
+
+        if (frame == null)
+        {
+            return string.Empty;
+        }
+
+        var uri = Previews.Render(frame, sprite, _mode!, _platform!, _slotColors, _profileId, scale: 2);
+        _thumbnailCache[sprite.Id] = uri;
+
+        return uri;
+    }
+
+    private static string FlipStyle(SpriteMapCell cell)
+    {
+        var x = cell.Flags.HasFlag(SpriteMapCellFlags.FlipHorizontal) ? -1 : 1;
+        var y = cell.Flags.HasFlag(SpriteMapCellFlags.FlipVertical) ? -1 : 1;
+
+        return x == 1 && y == 1 ? string.Empty : $"transform:scale({x},{y})";
+    }
+
+    // --- Επεξεργασία κελιών --------------------------------------------------
+
+    private SpriteMapCell? FindCell(int column, int row)
+    {
+        return _cells.FirstOrDefault(c => c.Column == column && c.Row == row);
+    }
+
+    private Task AssignAsync(int column, int row)
+    {
+        if (_selectedSpriteId == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        var flags = SpriteMapCellFlags.None;
+
+        if (_flipH)
+        {
+            flags |= SpriteMapCellFlags.FlipHorizontal;
+        }
+
+        if (_flipV)
+        {
+            flags |= SpriteMapCellFlags.FlipVertical;
+        }
+
+        var cell = FindCell(column, row);
+
+        if (cell == null)
+        {
+            cell = new SpriteMapCell { SpriteMapId = SpriteMapId, Column = column, Row = row };
+            _cells.Add(cell);
+        }
+
+        cell.SpriteId = _selectedSpriteId;
+        cell.Flags = flags;
+        _dirty = true;
+
+        return Task.CompletedTask;
+    }
+
+    private void Clear(int column, int row)
+    {
+        var cell = FindCell(column, row);
+
+        if (cell != null)
+        {
+            _cells.Remove(cell);
+            _dirty = true;
+        }
+    }
+
+    private void OnColumnsChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var value) && value >= 1 && value <= 64)
+        {
+            _map!.Columns = value;
+            DropOutOfBoundsCells();
+            _dirty = true;
+        }
+    }
+
+    private void OnRowsChanged(ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), out var value) && value >= 1 && value <= 64)
+        {
+            _map!.Rows = value;
+            DropOutOfBoundsCells();
+            _dirty = true;
+        }
+    }
+
+    /// <summary>
+    /// Η σμίκρυνση του πλέγματος πετάει τα κελιά που έμειναν έξω. Αν τα κρατούσαμε,
+    /// θα ήταν αόρατα αλλά θα επέστρεφαν σε μια μελλοντική μεγέθυνση — και θα
+    /// απορρίπτονταν από το API ως εκτός ορίων.
+    /// </summary>
+    private void DropOutOfBoundsCells()
+    {
+        _cells.RemoveAll(c => c.Column >= _map!.Columns || c.Row >= _map.Rows);
+    }
+
+    // --- Αποθήκευση ----------------------------------------------------------
+
+    private async Task SaveAsync()
+    {
+        if (_map == null || !_dirty)
+        {
+            return;
+        }
+
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        var tracked = await context.SpriteMaps
+            .Include(m => m.Cells)
+            .SingleOrDefaultAsync(m => m.Id == SpriteMapId && m.Project!.OwnerId == CurrentUserId!.Value);
+
+        if (tracked == null)
+        {
+            return;
+        }
+
+        tracked.Columns = _map.Columns;
+        tracked.Rows = _map.Rows;
+
+        context.SpriteMapCells.RemoveRange(tracked.Cells);
+
+        foreach (var cell in _cells.Where(c => c.SpriteId.HasValue))
+        {
+            context.SpriteMapCells.Add(new SpriteMapCell
+            {
+                SpriteMapId = SpriteMapId,
+                Column = cell.Column,
+                Row = cell.Row,
+                SpriteId = cell.SpriteId,
+                FrameIndex = cell.FrameIndex,
+                Flags = cell.Flags,
+            });
+        }
+
+        await context.SaveChangesAsync();
+
+        _dirty = false;
+    }
+}

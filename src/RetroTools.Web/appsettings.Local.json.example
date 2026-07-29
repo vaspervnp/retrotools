@@ -1,0 +1,30 @@
+{
+  "//": "Αντίγραψε το σε appsettings.Local.json και συμπλήρωσε τις τιμές.",
+  "//2": "Το appsettings.Local.json είναι στο .gitignore — ΔΕΝ ανεβαίνει ποτέ στο git.",
+  "//3": "Εναλλακτικά (προτιμότερο σε development): dotnet user-secrets set ...",
+
+  "ConnectionStrings": {
+    "RetroTools": "Server=DB_HOST;Port=3306;Database=DB_NAME;User ID=DB_USER;Password=DB_PASSWORD;TreatTinyAsBoolean=false;DefaultCommandTimeout=60;"
+  },
+
+  "Authentication": {
+    "Google": {
+      "ClientId": "GOOGLE_OAUTH_CLIENT_ID",
+      "ClientSecret": "GOOGLE_OAUTH_CLIENT_SECRET"
+    },
+    "GitHub": {
+      "ClientId": "GITHUB_OAUTH_CLIENT_ID",
+      "ClientSecret": "GITHUB_OAUTH_CLIENT_SECRET"
+    }
+  },
+
+  "RetroTools": {
+    "//": "Ρυθμίσεις για self-hosted λειτουργία πίσω από reverse proxy.",
+    "PathBase": "",
+    "BehindReverseProxy": true,
+    "TrustAnyProxy": false,
+    "KnownProxies": [ "127.0.0.1", "::1" ],
+    "KnownNetworks": [ "10.0.0.0/8" ],
+    "EnableHttpsRedirection": false
+  }
+}

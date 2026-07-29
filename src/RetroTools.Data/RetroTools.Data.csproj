@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>RetroTools.Data</RootNamespace>
+  </PropertyGroup>
+
+  <!-- EF Core παραμένει στο 9.0.x: το Pomelo (ο μόνος ώριμος MariaDB provider)
+       δεν έχει build για EF Core 10. Τρέχει κανονικά πάνω σε .NET 10.
+       ΜΗΝ αναβαθμιστούν αυτά σε 10.x χωρίς αντίστοιχη έκδοση Pomelo. -->
+  <ItemGroup>
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RetroTools.Core\RetroTools.Core.csproj" />
+  </ItemGroup>
+
+</Project>

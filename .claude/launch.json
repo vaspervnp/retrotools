@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "retrotools-web",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": [
+        "run",
+        "--project",
+        "src/RetroTools.Web",
+        "--urls",
+        "http://localhost:5180"
+      ],
+      "port": 5180
+    }
+  ]
+}

@@ -1,0 +1,638 @@
+@page "/projects/{ProjectId:long}"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using RetroTools.Core.Imaging
+@using RetroTools.Core.Model
+@using RetroTools.Core.Palettes
+@using RetroTools.Core.Platforms
+@using RetroTools.Core.Serialization
+@using RetroTools.Data
+@using RetroTools.Data.Entities
+@using RetroTools.Web.Services
+@attribute [Authorize]
+@inherits AuthenticatedPageBase
+@inject EditorDataService Data
+@inject SpritePreviewService Previews
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>@(_project?.Name ?? "Project") — RetroTools</PageTitle>
+
+@if (_project == null)
+{
+    <p class="text-secondary">Φόρτωση…</p>
+}
+else
+{
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/projects">Projects</a></li>
+            <li class="breadcrumb-item active">@_project.Name</li>
+        </ol>
+    </nav>
+
+    <h1>@_project.Name</h1>
+
+    <p class="text-secondary">
+        @_platform!.Name · @_mode!.Name ·
+        <span title="Αναλογία pixel">pixels @_mode.PixelAspect.Width:@_mode.PixelAspect.Height</span>
+    </p>
+
+    <div class="alert alert-secondary small">@_mode.Notes</div>
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <h2 class="h5 card-title">Νέο sprite</h2>
+
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label" for="sprite-name">Όνομα</label>
+                    <input id="sprite-name" class="form-control" @bind="_newName" placeholder="π.χ. player" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="sprite-w">Πλάτος (px)</label>
+                    <input id="sprite-w" type="number" class="form-control" @bind="_newWidth"
+                           disabled="@_mode.SpriteSize.IsFixed" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label" for="sprite-h">Ύψος (px)</label>
+                    <input id="sprite-h" type="number" class="form-control" @bind="_newHeight"
+                           disabled="@_mode.SpriteSize.IsFixed" />
+                </div>
+                <div class="col-md-2">
+                    <button class="btn btn-primary w-100" @onclick="CreateSpriteAsync"
+                            disabled="@string.IsNullOrWhiteSpace(_newName)">
+                        Δημιουργία
+                    </button>
+                </div>
+            </div>
+
+            <div class="form-text mt-2">
+                @if (_mode.SpriteSize.IsFixed)
+                {
+                    <text>Το @_mode.Name απαιτεί ακριβώς @_mode.SpriteSize.FixedWidth×@_mode.SpriteSize.FixedHeight pixels — το ορίζει το υλικό.</text>
+                }
+                else
+                {
+                    <text>Το πλάτος πρέπει να είναι πολλαπλάσιο του @_mode.SpriteSize.WidthAlignment (byte alignment του mode).</text>
+                }
+            </div>
+
+            @if (_error != null)
+            {
+                <div class="alert alert-danger mt-3 mb-0">@_error</div>
+            }
+
+            <hr />
+
+            <h3 class="h6">…ή εισαγωγή από PNG</h3>
+
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" id="keep-palette"
+                       checked="@_keepPalette" @onchange="e => _keepPalette = e.Value is bool b && b" />
+                <label class="form-check-label small" for="keep-palette">
+                    Κράτα την παλέτα του project (αλλιώς επιλέγονται αυτόματα τα καταλληλότερα
+                    χρώματα — <strong>αλλάζει τα χρώματα όλων των sprites</strong>)
+                </label>
+            </div>
+
+            <InputFile class="form-control" accept=".png" OnChange="ImportPngAsync" disabled="@_importing" />
+
+            <div class="form-text">
+                Η εικόνα πρέπει να έχει διαστάσεις που δέχεται το @_mode.Name.
+            </div>
+
+            @if (_importing)
+            {
+                <p class="text-secondary small mt-2 mb-0">Γίνεται εισαγωγή…</p>
+            }
+
+            @if (_importMessages.Count > 0)
+            {
+                <div class="alert @(_importFailed ? "alert-danger" : "alert-warning") mt-3 mb-0">
+                    <ul class="mb-0">
+                        @foreach (var message in _importMessages)
+                        {
+                            <li>@message</li>
+                        }
+                    </ul>
+                </div>
+            }
+        </div>
+    </div>
+
+    @if (_sprites.Count == 0)
+    {
+        <p class="text-secondary">Δεν υπάρχουν sprites ακόμη.</p>
+    }
+    else
+    {
+        <div class="row g-3">
+            @foreach (var sprite in _sprites)
+            {
+                var current = sprite;
+                <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <div class="sprite-preview mb-2">
+                                <img src="@Thumbnail(current)" alt="@current.Name" />
+                            </div>
+
+                            <h3 class="h6 mb-1">@current.Name</h3>
+                            <p class="small text-secondary mb-2">
+                                @current.WidthPx×@current.HeightPx px · @current.Frames.Count καρέ
+                            </p>
+
+                            <select class="form-select form-select-sm mb-2"
+                                    value="@(current.GroupId?.ToString() ?? string.Empty)"
+                                    @onchange="e => MoveToGroupAsync(current.Id, e)">
+                                <option value="">— χωρίς ομάδα —</option>
+                                @foreach (var group in _groups)
+                                {
+                                    <option value="@group.Id">@group.Name</option>
+                                }
+                            </select>
+
+                            <a class="btn btn-sm btn-primary" href="@($"/editor/sprite/{current.Id}")">Επεξεργασία</a>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSpriteAsync(current.Id)">
+                                Διαγραφή
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <h2 class="h4 mt-5">Ομάδες</h2>
+
+    <div class="d-flex gap-2 align-items-end mb-3" style="max-width:32rem">
+        <div class="flex-grow-1">
+            <label class="form-label" for="group-name">Νέα ομάδα</label>
+            <input id="group-name" class="form-control" @bind="_newGroupName" placeholder="π.χ. Εχθροί" />
+        </div>
+        <button class="btn btn-outline-primary" @onclick="CreateGroupAsync"
+                disabled="@string.IsNullOrWhiteSpace(_newGroupName)">Προσθήκη</button>
+    </div>
+
+    @if (_groups.Count > 0)
+    {
+        <ul class="list-group mb-4" style="max-width:32rem">
+            @foreach (var group in _groups)
+            {
+                var current = group;
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span>@current.Name <span class="badge text-bg-light">@_sprites.Count(s => s.GroupId == current.Id)</span></span>
+                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteGroupAsync(current.Id)">
+                        Διαγραφή
+                    </button>
+                </li>
+            }
+        </ul>
+        <p class="form-text">Η διαγραφή ομάδας δεν διαγράφει τα sprites της — μένουν αταξινόμητα.</p>
+    }
+
+    <h2 class="h4 mt-5">Spritemaps</h2>
+
+    <div class="row g-2 align-items-end mb-3" style="max-width:48rem">
+        <div class="col-md-5">
+            <label class="form-label" for="map-name">Νέο spritemap</label>
+            <input id="map-name" class="form-control" @bind="_newMapName" placeholder="π.χ. tileset" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="map-cols">Στήλες</label>
+            <input id="map-cols" type="number" class="form-control" @bind="_newMapColumns" min="1" max="64" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label" for="map-rows">Γραμμές</label>
+            <input id="map-rows" type="number" class="form-control" @bind="_newMapRows" min="1" max="64" />
+        </div>
+        <div class="col-md-1">
+            <button class="btn btn-outline-primary w-100" @onclick="CreateSpriteMapAsync"
+                    disabled="@string.IsNullOrWhiteSpace(_newMapName)">+</button>
+        </div>
+    </div>
+
+    @if (_spriteMaps.Count > 0)
+    {
+        <ul class="list-group" style="max-width:48rem">
+            @foreach (var map in _spriteMaps)
+            {
+                var current = map;
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <a href="@($"/editor/spritemap/{current.Id}")">@current.Name</a>
+                    <span>
+                        <span class="badge text-bg-secondary me-2">@current.Columns×@current.Rows</span>
+                        <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteSpriteMapAsync(current.Id)">
+                            Διαγραφή
+                        </button>
+                    </span>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    [Parameter]
+    public long ProjectId { get; set; }
+
+    private Project? _project;
+    private PlatformDefinition? _platform;
+    private GraphicsMode? _mode;
+    private List<Sprite> _sprites = new List<Sprite>();
+
+    private List<SpriteGroup> _groups = new List<SpriteGroup>();
+    private List<SpriteMap> _spriteMaps = new List<SpriteMap>();
+    private int[] _slotColors = Array.Empty<int>();
+    private readonly Dictionary<long, string> _thumbnails = new Dictionary<long, string>();
+
+    private string _newName = string.Empty;
+    private int _newWidth = 16;
+    private int _newHeight = 16;
+    private string _newGroupName = string.Empty;
+    private string _newMapName = string.Empty;
+    private int _newMapColumns = 4;
+    private int _newMapRows = 4;
+    private string? _error;
+
+    private bool _keepPalette;
+    private bool _importing;
+    private bool _importFailed;
+    private List<string> _importMessages = new List<string>();
+
+    private const long MaxPngBytes = 8L * 1024 * 1024;
+
+    /// <summary>
+    /// Εισαγωγή PNG ως νέο sprite. Οι προειδοποιήσεις του quantizer εμφανίζονται
+    /// αλλά <b>δεν</b> ακυρώνουν την εισαγωγή: ο χρήστης βλέπει τι χάθηκε και
+    /// αποφασίζει αν το κρατήσει ή θα ξαναδουλέψει την πηγή.
+    /// </summary>
+    private async Task ImportPngAsync(InputFileChangeEventArgs args)
+    {
+        _importMessages = new List<string>();
+        _importFailed = false;
+        _importing = true;
+
+        try
+        {
+            var file = args.File;
+
+            if (file.Size > MaxPngBytes)
+            {
+                _importFailed = true;
+                _importMessages.Add("Το αρχείο ξεπερνά τα 8 MB.");
+                return;
+            }
+
+            byte[] content;
+
+            await using (var stream = file.OpenReadStream(MaxPngBytes))
+            await using (var buffer = new MemoryStream())
+            {
+                await stream.CopyToAsync(buffer);
+                content = buffer.ToArray();
+            }
+
+            DecodedImage image;
+
+            try
+            {
+                image = PngReader.Read(content);
+            }
+            catch (InvalidDataException exception)
+            {
+                _importFailed = true;
+                _importMessages.Add(exception.Message);
+                return;
+            }
+
+            var sizeErrors = _mode!.SpriteSize.Validate(image.Width, image.Height);
+
+            if (sizeErrors.Count > 0)
+            {
+                _importFailed = true;
+                _importMessages.Add("Η εικόνα είναι " + image.Width + "×" + image.Height + ".");
+                _importMessages.AddRange(sizeErrors);
+                return;
+            }
+
+            var result = ImageQuantizer.Quantize(image, _mode, _platform!, new ImageImportOptions
+            {
+                Strategy = _keepPalette ? PaletteStrategy.UseProjectPalette : PaletteStrategy.AutoAssign,
+                ProjectSlotColors = _slotColors,
+                PaletteProfileId = _project!.PaletteProfileId,
+            });
+
+            await using var context = Data.CreateContext(CurrentUserId);
+
+            var sprite = new Sprite
+            {
+                ProjectId = ProjectId,
+                Name = Path.GetFileNameWithoutExtension(file.Name),
+                WidthPx = image.Width,
+                HeightPx = image.Height,
+                HasMask = _mode.SupportsMask,
+                SortOrder = _sprites.Count,
+            };
+
+            sprite.Frames.Add(new SpriteFrame
+            {
+                FrameIndex = 0,
+                PixelData = RsprContainer.Write(result.Frame),
+            });
+
+            context.Sprites.Add(sprite);
+
+            if (!_keepPalette)
+            {
+                await SavePaletteAsync(context, result.SlotColors);
+                _importMessages.Add("Η παλέτα του project ενημερώθηκε με τα χρώματα της εικόνας.");
+            }
+
+            await context.SaveChangesAsync();
+
+            _importMessages.AddRange(result.Warnings);
+
+            await LoadAsync();
+        }
+        catch (Exception exception)
+        {
+            _importFailed = true;
+            _importMessages.Add("Η εισαγωγή απέτυχε: " + exception.Message);
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    private async Task SavePaletteAsync(RetroToolsDbContext context, IReadOnlyList<int> slotColors)
+    {
+        var palette = await context.Palettes
+            .Include(p => p.Entries)
+            .FirstOrDefaultAsync(p => p.ProjectId == ProjectId);
+
+        if (palette == null)
+        {
+            palette = new Palette { ProjectId = ProjectId, Name = "Κύρια" };
+            context.Palettes.Add(palette);
+        }
+
+        context.PaletteEntries.RemoveRange(palette.Entries);
+
+        for (var slot = 0; slot < slotColors.Count; slot++)
+        {
+            palette.Entries.Add(new PaletteEntry
+            {
+                SlotIndex = slot,
+                HardwareColorIndex = slotColors[slot],
+                Role = (int)_mode!.PixelSlots[slot].Role,
+            });
+        }
+    }
+
+    protected override async Task OnAuthenticatedInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        _project = await context.Projects
+            .AsNoTracking()
+            .SingleOrDefaultAsync(p => p.Id == ProjectId && p.OwnerId == CurrentUserId!.Value);
+
+        if (_project == null)
+        {
+            Navigation.NavigateTo("/projects");
+            return;
+        }
+
+        _platform = PlatformCatalog.Get(_project.PlatformCode);
+        _mode = PlatformCatalog.GetMode(_project.ModeCode);
+
+        if (_mode.SpriteSize.IsFixed)
+        {
+            _newWidth = _mode.SpriteSize.FixedWidth!.Value;
+            _newHeight = _mode.SpriteSize.FixedHeight!.Value;
+        }
+        else
+        {
+            _newWidth = Math.Max(_mode.SpriteSize.WidthAlignment, 16 / _mode.SpriteSize.WidthAlignment * _mode.SpriteSize.WidthAlignment);
+            _newHeight = 16;
+        }
+
+        _sprites = await context.Sprites
+            .AsNoTracking()
+            .Include(s => s.Frames)
+            .Where(s => s.ProjectId == ProjectId)
+            .OrderBy(s => s.SortOrder).ThenBy(s => s.Id)
+            .ToListAsync();
+
+        _groups = await context.SpriteGroups
+            .AsNoTracking()
+            .Where(g => g.ProjectId == ProjectId)
+            .OrderBy(g => g.SortOrder).ThenBy(g => g.Name)
+            .ToListAsync();
+
+        _spriteMaps = await context.SpriteMaps
+            .AsNoTracking()
+            .Where(m => m.ProjectId == ProjectId)
+            .OrderBy(m => m.Name)
+            .ToListAsync();
+
+        var palette = await context.Palettes
+            .AsNoTracking()
+            .Include(p => p.Entries)
+            .FirstOrDefaultAsync(p => p.ProjectId == ProjectId);
+
+        var defaults = DefaultPalettes.For(_mode);
+        _slotColors = defaults.ToArray();
+
+        if (palette != null)
+        {
+            foreach (var entry in palette.Entries.Where(e => e.SlotIndex < _slotColors.Length))
+            {
+                _slotColors[entry.SlotIndex] = entry.HardwareColorIndex;
+            }
+        }
+
+        _thumbnails.Clear();
+    }
+
+    private string Thumbnail(Sprite sprite)
+    {
+        if (_thumbnails.TryGetValue(sprite.Id, out var cached))
+        {
+            return cached;
+        }
+
+        var frame = sprite.Frames.OrderBy(f => f.FrameIndex).FirstOrDefault();
+
+        if (frame == null)
+        {
+            return string.Empty;
+        }
+
+        var uri = Previews.Render(frame, sprite, _mode!, _platform!, _slotColors, _project!.PaletteProfileId, scale: 3);
+        _thumbnails[sprite.Id] = uri;
+
+        return uri;
+    }
+
+    // --- Ομάδες --------------------------------------------------------------
+
+    private async Task CreateGroupAsync()
+    {
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        context.SpriteGroups.Add(new SpriteGroup
+        {
+            ProjectId = ProjectId,
+            Name = _newGroupName.Trim(),
+            SortOrder = _groups.Count,
+        });
+
+        await context.SaveChangesAsync();
+
+        _newGroupName = string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task DeleteGroupAsync(long groupId)
+    {
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        var group = await context.SpriteGroups
+            .SingleOrDefaultAsync(g => g.Id == groupId && g.Project!.OwnerId == CurrentUserId!.Value);
+
+        if (group == null)
+        {
+            return;
+        }
+
+        context.SpriteGroups.Remove(group);
+        await context.SaveChangesAsync();
+
+        await LoadAsync();
+    }
+
+    private async Task MoveToGroupAsync(long spriteId, ChangeEventArgs args)
+    {
+        var raw = args.Value?.ToString();
+        long? groupId = string.IsNullOrEmpty(raw) ? null : long.Parse(raw);
+
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        var sprite = await context.Sprites
+            .SingleOrDefaultAsync(s => s.Id == spriteId && s.Project!.OwnerId == CurrentUserId!.Value);
+
+        if (sprite == null)
+        {
+            return;
+        }
+
+        sprite.GroupId = groupId;
+        await context.SaveChangesAsync();
+
+        await LoadAsync();
+    }
+
+    // --- Spritemaps ----------------------------------------------------------
+
+    private async Task CreateSpriteMapAsync()
+    {
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        var map = new SpriteMap
+        {
+            ProjectId = ProjectId,
+            Name = _newMapName.Trim(),
+            Columns = _newMapColumns,
+            Rows = _newMapRows,
+            CellWidthPx = _newWidth,
+            CellHeightPx = _newHeight,
+        };
+
+        context.SpriteMaps.Add(map);
+        await context.SaveChangesAsync();
+
+        Navigation.NavigateTo("/editor/spritemap/" + map.Id);
+    }
+
+    private async Task DeleteSpriteMapAsync(long mapId)
+    {
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        var map = await context.SpriteMaps
+            .SingleOrDefaultAsync(m => m.Id == mapId && m.Project!.OwnerId == CurrentUserId!.Value);
+
+        if (map == null)
+        {
+            return;
+        }
+
+        context.SpriteMaps.Remove(map);
+        await context.SaveChangesAsync();
+
+        await LoadAsync();
+    }
+
+    private async Task CreateSpriteAsync()
+    {
+        _error = null;
+
+        // Ο ίδιος κανόνας που επιβάλλει και το API — ο editor δεν είναι παράκαμψη.
+        var errors = _mode!.SpriteSize.Validate(_newWidth, _newHeight);
+
+        if (errors.Count > 0)
+        {
+            _error = string.Join(" ", errors);
+            return;
+        }
+
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        var sprite = new Sprite
+        {
+            ProjectId = ProjectId,
+            Name = _newName.Trim(),
+            WidthPx = _newWidth,
+            HeightPx = _newHeight,
+            HasMask = _mode.SupportsMask,
+            SortOrder = _sprites.Count,
+        };
+
+        sprite.Frames.Add(new SpriteFrame
+        {
+            FrameIndex = 0,
+            PixelData = RsprContainer.Write(new FrameBuffer(_newWidth, _newHeight)),
+        });
+
+        context.Sprites.Add(sprite);
+        await context.SaveChangesAsync();
+
+        Navigation.NavigateTo("/editor/sprite/" + sprite.Id);
+    }
+
+    private async Task DeleteSpriteAsync(long spriteId)
+    {
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        var sprite = await context.Sprites
+            .SingleOrDefaultAsync(s => s.Id == spriteId && s.Project!.OwnerId == CurrentUserId!.Value);
+
+        if (sprite == null)
+        {
+            return;
+        }
+
+        context.Sprites.Remove(sprite);
+        await context.SaveChangesAsync();
+
+        await LoadAsync();
+    }
+}

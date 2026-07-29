@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RetroTools.Core/RetroTools.Core.csproj" />
+    <Project Path="src/RetroTools.Data/RetroTools.Data.csproj" />
+    <Project Path="src/RetroTools.Web/RetroTools.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RetroTools.Core.Tests/RetroTools.Core.Tests.csproj" />
+    <Project Path="tests/RetroTools.Data.Tests/RetroTools.Data.Tests.csproj" />
+    <Project Path="tests/RetroTools.Web.Tests/RetroTools.Web.Tests.csproj" />
+  </Folder>
+</Solution>

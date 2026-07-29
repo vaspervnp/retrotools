@@ -1,0 +1,276 @@
+@page "/projects"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@using RetroTools.Core.Platforms
+@using RetroTools.Core.Serialization
+@using RetroTools.Data.Entities
+@using RetroTools.Web.Services
+@attribute [Authorize]
+@inherits AuthenticatedPageBase
+@inject EditorDataService Data
+@inject NavigationManager Navigation
+@rendermode InteractiveServer
+
+<PageTitle>Τα projects μου — RetroTools</PageTitle>
+
+<h1>Τα projects μου</h1>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="h5 card-title">Νέο project</h2>
+
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label" for="new-name">Όνομα</label>
+                <input id="new-name" class="form-control" @bind="_newName" placeholder="π.χ. Jet Set Willy" />
+            </div>
+            <div class="col-md-5">
+                <label class="form-label" for="new-mode">Πλατφόρμα &amp; mode</label>
+                <select id="new-mode" class="form-select" @bind="_newModeCode">
+                    @foreach (var platform in PlatformCatalog.All)
+                    {
+                        <optgroup label="@platform.Name">
+                            @foreach (var mode in platform.Modes)
+                            {
+                                <option value="@mode.Code">@mode.Name</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary w-100" @onclick="CreateAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_newName))">
+                    Δημιουργία
+                </button>
+            </div>
+        </div>
+
+        @if (_error != null)
+        {
+            <div class="alert alert-danger mt-3 mb-0">@_error</div>
+        }
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="h5 card-title">Εισαγωγή από αρχείο</h2>
+
+        <p class="text-secondary small">
+            Ανέβασε ένα <code>.retrotools.json</code> που εξήγαγες από εδώ ή από άλλη εγκατάσταση.
+            Δημιουργείται πάντα <strong>νέο</strong> project — τίποτα υπάρχον δεν αντικαθίσταται.
+        </p>
+
+        <InputFile class="form-control" accept=".json" OnChange="ImportAsync" disabled="@_importing" />
+
+        @if (_importing)
+        {
+            <p class="text-secondary small mt-2 mb-0">Γίνεται εισαγωγή…</p>
+        }
+
+        @if (_importErrors.Count > 0)
+        {
+            <div class="alert alert-danger mt-3 mb-0">
+                <strong>Το αρχείο δεν είναι έγκυρο:</strong>
+                <ul class="mb-0 mt-1">
+                    @foreach (var error in _importErrors)
+                    {
+                        <li>@error</li>
+                    }
+                </ul>
+            </div>
+        }
+    </div>
+</div>
+
+@if (_projects == null)
+{
+    <p class="text-secondary">Φόρτωση…</p>
+}
+else if (_projects.Count == 0)
+{
+    <p class="text-secondary">Δεν έχεις projects ακόμη. Φτιάξε το πρώτο σου παραπάνω.</p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead>
+                <tr>
+                    <th>Όνομα</th>
+                    <th>Πλατφόρμα</th>
+                    <th>Mode</th>
+                    <th class="text-end">Sprites</th>
+                    <th>Ενημερώθηκε</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _projects)
+                {
+                    <tr>
+                        <td><a href="@($"/projects/{item.Project.Id}")">@item.Project.Name</a></td>
+                        <td>@PlatformCatalog.Get(item.Project.PlatformCode).Name</td>
+                        <td><code>@item.Project.ModeCode</code></td>
+                        <td class="text-end">@item.SpriteCount</td>
+                        <td class="text-secondary small">@item.Project.UpdatedUtc.ToLocalTime().ToString("g")</td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-outline-secondary"
+                               href="@($"/api/projects/{item.Project.Id}/document")" download>
+                                Εξαγωγή JSON
+                            </a>
+                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAsync(item.Project.Id)">
+                                Διαγραφή
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private sealed record ProjectRow(Project Project, int SpriteCount);
+
+    private List<ProjectRow>? _projects;
+    private string _newName = string.Empty;
+    private string _newModeCode = "cpc.mode0";
+    private string? _error;
+    private bool _busy;
+    private bool _importing;
+    private List<string> _importErrors = new List<string>();
+
+    /// <summary>Ίδιο όριο με το API — 32 MB.</summary>
+    private const long MaxImportBytes = 32L * 1024 * 1024;
+
+    private async Task ImportAsync(InputFileChangeEventArgs args)
+    {
+        _importErrors = new List<string>();
+        _importing = true;
+
+        try
+        {
+            var file = args.File;
+
+            if (file.Size > MaxImportBytes)
+            {
+                _importErrors.Add("Το αρχείο ξεπερνά τα 32 MB.");
+                return;
+            }
+
+            byte[] content;
+
+            await using (var stream = file.OpenReadStream(MaxImportBytes))
+            await using (var buffer = new MemoryStream())
+            {
+                await stream.CopyToAsync(buffer);
+                content = buffer.ToArray();
+            }
+
+            var read = ProjectDocumentSerializer.Read(content);
+
+            if (!read.Success)
+            {
+                // Όλα τα προβλήματα μαζί: ο χρήστης διορθώνει μία φορά.
+                _importErrors.AddRange(read.Errors);
+                return;
+            }
+
+            await using var context = Data.CreateContext(CurrentUserId);
+            var service = new ProjectDocumentService(context);
+
+            var imported = await service.ImportAsync(read.Document!, CurrentUserId!.Value);
+
+            Navigation.NavigateTo("/projects/" + imported.Id);
+        }
+        catch (Exception exception)
+        {
+            _importErrors.Add("Η εισαγωγή απέτυχε: " + exception.Message);
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    protected override async Task OnAuthenticatedInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        var rows = await context.Projects
+            .AsNoTracking()
+            .Where(p => p.OwnerId == CurrentUserId!.Value)
+            .OrderByDescending(p => p.UpdatedUtc)
+            .Select(p => new { Project = p, SpriteCount = p.Sprites.Count })
+            .ToListAsync();
+
+        _projects = rows.Select(r => new ProjectRow(r.Project, r.SpriteCount)).ToList();
+    }
+
+    private async Task CreateAsync()
+    {
+        _error = null;
+        _busy = true;
+
+        try
+        {
+            if (!PlatformCatalog.TryGetMode(_newModeCode, out var mode) || mode == null)
+            {
+                _error = "Άγνωστο mode.";
+                return;
+            }
+
+            var platform = PlatformCatalog.Get(mode.Platform);
+
+            await using var context = Data.CreateContext(CurrentUserId);
+
+            var project = new Project
+            {
+                OwnerId = CurrentUserId!.Value,
+                Name = _newName.Trim(),
+                PlatformCode = platform.Code,
+                ModeCode = mode.Code,
+                PaletteProfileId = platform.Palette.DefaultProfile.Id,
+            };
+
+            context.Projects.Add(project);
+            await context.SaveChangesAsync();
+
+            Navigation.NavigateTo("/projects/" + project.Id);
+        }
+        catch (Exception ex)
+        {
+            _error = "Η δημιουργία απέτυχε: " + ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync(long projectId)
+    {
+        await using var context = Data.CreateContext(CurrentUserId);
+
+        // Ρητός έλεγχος ιδιοκτησίας: τα query filters αφήνουν να φανούν και τα
+        // δημόσια projects, που δεν επιτρέπεται να διαγραφούν από άλλον.
+        var project = await context.Projects
+            .SingleOrDefaultAsync(p => p.Id == projectId && p.OwnerId == CurrentUserId!.Value);
+
+        if (project == null)
+        {
+            return;
+        }
+
+        context.Projects.Remove(project);
+        await context.SaveChangesAsync();
+
+        await LoadAsync();
+    }
+}

@@ -1,0 +1,16 @@
+@using Microsoft.AspNetCore.Components.Authorization
+
+<Router AppAssembly="typeof(Program).Assembly">
+    <Found Context="routeData">
+        <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <NotAuthorized>
+                <div class="container py-5">
+                    <h1>Χρειάζεται σύνδεση</h1>
+                    <p class="text-secondary">Συνδέσου για να δεις και να επεξεργαστείς τα projects σου.</p>
+                    <SignInButtons />
+                </div>
+            </NotAuthorized>
+        </AuthorizeRouteView>
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+</Router>

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <UserSecretsId>retrotools-spritestudio-2b7f4c19</UserSecretsId>
+    <RootNamespace>RetroTools.Web</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RetroTools.Core\RetroTools.Core.csproj" />
+    <ProjectReference Include="..\RetroTools.Data\RetroTools.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AspNet.Security.OAuth.GitHub" Version="10.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Systemd" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.10" />
+  </ItemGroup>
+
+</Project>

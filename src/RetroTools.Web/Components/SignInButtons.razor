@@ -1,0 +1,35 @@
+@using RetroTools.Web.Configuration
+@inject AuthenticationSettings Settings
+
+@if (!Settings.GitHub.IsConfigured && !Settings.Google.IsConfigured)
+{
+    <div class="alert alert-warning">
+        <strong>Δεν έχει ρυθμιστεί κανένας provider σύνδεσης.</strong>
+        <div class="small mt-1">
+            Όρισε τα κλειδιά OAuth με <code>dotnet user-secrets</code> — δες το README.
+        </div>
+    </div>
+}
+else
+{
+    <div class="d-flex gap-2 flex-wrap">
+        @if (Settings.GitHub.IsConfigured)
+        {
+            <a class="btn btn-dark" href="@($"/account/signin?provider=github&returnUrl={ReturnUrl}")">
+                Σύνδεση με GitHub
+            </a>
+        }
+
+        @if (Settings.Google.IsConfigured)
+        {
+            <a class="btn btn-outline-secondary" href="@($"/account/signin?provider=google&returnUrl={ReturnUrl}")">
+                Σύνδεση με Google
+            </a>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string ReturnUrl { get; set; } = "/projects";
+}

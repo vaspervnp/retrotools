@@ -1,0 +1,71 @@
+@page "/"
+@using RetroTools.Core.Platforms
+
+<PageTitle>RetroTools — Sprite Studio</PageTitle>
+
+<h1>RetroTools Sprite Studio</h1>
+
+<p class="lead">
+    Σχεδίαση sprites και spritemaps για Amstrad CPC, Commodore 64 και ZX Spectrum,
+    με τους αυθεντικούς περιορισμούς κάθε μηχανής.
+</p>
+
+<AuthorizeView>
+    <Authorized>
+        <a class="btn btn-primary" href="/projects">Στα projects μου</a>
+    </Authorized>
+    <NotAuthorized>
+        <p>Συνδέσου για να ξεκινήσεις.</p>
+        <SignInButtons />
+    </NotAuthorized>
+</AuthorizeView>
+
+<h2 class="h4 mt-5">Υποστηριζόμενες πλατφόρμες</h2>
+
+<div class="row g-3">
+    @foreach (var platform in PlatformCatalog.All)
+    {
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h3 class="h5">@platform.Name</h3>
+                    <p class="small text-secondary mb-2">@platform.Manufacturer, @platform.Year</p>
+
+                    <ul class="small mb-0">
+                        <li>
+                            @platform.Palette.Count χρώματα υλικού
+                            @if (platform.Palette.CountDistinctColors() != platform.Palette.Count)
+                            {
+                                <text>(@platform.Palette.CountDistinctColors() οπτικά μοναδικά)</text>
+                            }
+                        </li>
+                        <li>@platform.Modes.Count modes</li>
+                        <li>
+                            @if (platform.HasHardwareSprites)
+                            {
+                                <text>Hardware sprites</text>
+                            }
+                            else
+                            {
+                                <text>Software sprites</text>
+                            }
+                        </li>
+                        @if (platform.HasProgrammablePalette)
+                        {
+                            <li>Προγραμματιζόμενη παλέτα</li>
+                        }
+                    </ul>
+
+                    <div class="mt-3 d-flex flex-wrap gap-1">
+                        @foreach (var color in platform.Palette.Colors)
+                        {
+                            <span class="d-inline-block border"
+                                  style="width:1rem;height:1rem;background:@platform.Palette.GetRgb(color.Index).ToHex()"
+                                  title="@color.Index — @color.Name"></span>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
