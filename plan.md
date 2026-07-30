@@ -1,122 +1,144 @@
 # RetroTools – Sprite / Spritemap Studio
 
-Πλάνο υλοποίησης web εργαλείου σχεδίασης sprites & spritemaps για **Amstrad CPC**, **Commodore 64** και **ZX Spectrum**.
+> **Language:** English · [Ελληνικά](plan.el.md)
 
-- Έκδοση εγγράφου: 1.1
-- Ημερομηνία: 2026-07-29
-- Κατάσταση: **Εγκεκριμένο** — οι αποφάσεις του §15 ενσωματώθηκαν. **M0 ολοκληρωμένο.**
+Implementation plan for a web tool for designing sprites & spritemaps for
+**Amstrad CPC**, **Commodore 64** and **ZX Spectrum**.
+
+- Document version: 1.1
+- Date: 2026-07-29
+- Status: **Approved** — the decisions in §15 have been incorporated. **M0 complete.**
 
 ---
 
-## 1. Στόχος & Scope
+## 1. Goal & scope
 
-### 1.1 Τι θα κάνει το εργαλείο
+### 1.1 What the tool does
 
-Web εφαρμογή όπου ο χρήστης:
+A web application where the user:
 
-1. Δημιουργεί **Project** επιλέγοντας πλατφόρμα (CPC / C64 / Spectrum) και γραφικό **mode**.
-2. Σχεδιάζει **sprites** σε pixel editor με **αυθεντική παλέτα** και **αυθεντικούς περιορισμούς** της πλατφόρμας (αριθμός χρωμάτων, byte alignment, attribute clash, pixel aspect ratio).
-3. Ομαδοποιεί sprites σε **Sprite Groups / Spritemaps** (sheets με γραμμές/στήλες, π.χ. animation strips, tilesets, character sets).
-4. **Αποθηκεύει / φορτώνει** τα πάντα σε MariaDB.
-5. Κάνει **export** σε μορφές που τρώνε άμεσα οι assemblers της εποχής (Z80 / 6502) καθώς και σε PNG/JSON, και **import** από PNG/JSON.
+1. Creates a **project** by choosing a platform (CPC / C64 / Spectrum) and a graphics **mode**.
+2. Draws **sprites** in a pixel editor with the platform's **authentic palette** and
+   **authentic constraints** (colour count, byte alignment, attribute clash, pixel aspect ratio).
+3. Organises sprites into **sprite groups / spritemaps** (sheets with rows and columns —
+   animation strips, tilesets, character sets).
+4. **Saves and loads** everything in MariaDB.
+5. **Exports** to formats period assemblers accept directly (Z80 / 6502) as well as
+   PNG/JSON, and **imports** from PNG/JSON.
 
-### 1.2 Εκτός scope (v1)
+### 1.2 Out of scope (v1)
 
-- Full-screen bitmap/loading-screen editor (μόνο sprites & tiles).
-- Map editor επιπέδων (level design) — μόνο spritemaps/tilesheets.
-- Emulator integration / live preview σε πραγματικό υλικό.
+- Full-screen bitmap / loading-screen editor (sprites & tiles only).
+- Level map editor — spritemaps/tilesheets only.
+- Emulator integration / live preview on real hardware.
 - Multi-user real-time collaboration.
-- ULAplus, Timex hi-colour, VDC, CPC Plus (ASIC 4096 χρώματα, hardware sprites) — καταγράφονται ως μελλοντικά extensions (βλ. §14).
+- ULAplus, Timex hi-colour, VDC, CPC Plus (ASIC 4096 colours, hardware sprites) — recorded
+  as future extensions (see §14).
 
 ---
 
-## 2. Τεχνικό Stack & Αποφάσεις
+## 2. Technical stack & decisions
 
-| Θέμα | Απόφαση | Αιτιολογία |
+| Topic | Decision | Rationale |
 |---|---|---|
-| Γλώσσα | **C# 10** (`<LangVersion>10.0</LangVersion>`) | Ρητή απαίτηση χρήστη |
-| Target Framework | **net10.0** | Επιλογή χρήστη. SDK 10.0.301 / runtime 10.0.9 εγκατεστημένα. |
-| Web framework | **ASP.NET Core MVC + Blazor (Interactive Server)** | Ρητή απαίτηση. MVC για site/CRUD/API, Blazor για τον editor. |
-| ORM | **EF Core 9.0.x + Pomelo.EntityFrameworkCore.MySql 9.0.0**, καρφωμένα | Το Pomelo (ο μόνος ώριμος MariaDB provider) **δεν έχει build για EF Core 10**. Τα EF 9 assemblies τρέχουν κανονικά πάνω σε .NET 10 — επιβεβαιώθηκε με build + live queries στη MariaDB 11.4.3. |
-| DB | **MariaDB 11.4.3** | Ρητή απαίτηση. Επιβεβαιώθηκε σύνδεση, δικαιώματα DDL, utf8mb4, BLOB round-trip. Τα στοιχεία του διακομιστή μένουν εκτός repository. |
-| Rendering canvas | HTML `<canvas>` + JS module, με Blazor να κρατά το authoritative model | Το ζωγράφισμα ανά pixel σε Blazor Server θα είχε απαράδεκτο latency ανά mouse-move. |
-| Auth | **Cookie auth + OAuth (GitHub, Google)**, δικός μας πίνακας `users`. **Multi-user από την αρχή.** | Επιλογή χρήστη. **Χωρίς ASP.NET Core Identity**: το `Identity.EntityFrameworkCore` 10.x απαιτεί EF Core 10, που θα έσπαγε το Pomelo 9. Χωρίς τοπικούς κωδικούς το Identity δεν προσφέρει τίποτα εδώ. |
-| Hosting | Self-hosted service (**Windows Service / systemd**) πίσω από reverse proxy | Επιλογή χρήστη. Βλ. §2.2. |
-| Tests | xUnit | Κρίσιμα τα codecs/παλέτες. |
+| Language | **C# 10** (`<LangVersion>10.0</LangVersion>`) | Explicit user requirement |
+| Target framework | **net10.0** | User's choice. SDK 10.0.301 / runtime 10.0.9 installed. |
+| Web framework | **ASP.NET Core MVC + Blazor (Interactive Server)** | Explicit requirement. MVC for site/CRUD/API, Blazor for the editor. |
+| ORM | **EF Core 9.0.x + Pomelo.EntityFrameworkCore.MySql 9.0.0**, pinned | Pomelo (the only mature MariaDB provider) **has no build for EF Core 10**. The EF 9 assemblies run fine on .NET 10 — confirmed by build plus live queries against MariaDB 11.4.3. |
+| DB | **MariaDB 11.4.3** | Explicit requirement. Connection, DDL rights, utf8mb4 and BLOB round-trip all confirmed. The server's details stay outside the repository. |
+| Rendering canvas | HTML `<canvas>` + JS module, with Blazor holding the authoritative model | Per-pixel drawing over Blazor Server would have unacceptable latency per mouse-move. |
+| Auth | **Cookie auth + OAuth (GitHub, Google)**, our own `users` table. **Multi-user from the start.** | User's choice. **No ASP.NET Core Identity**: `Identity.EntityFrameworkCore` 10.x requires EF Core 10, which would break Pomelo 9. Without local passwords, Identity offers nothing here. |
+| Hosting | Self-hosted service (**Windows Service / systemd**) behind a reverse proxy | User's choice. See §2.2. |
+| Tests | xUnit | The codecs and palettes are critical. |
 
-> **Σημείωση C# 10:** Το `LangVersion 10.0` απαγορεύει raw string literals (C#11), `required` members (C#11), primary constructors (C#12), collection expressions (C#12). Επιτρέπονται file-scoped namespaces, global usings, record structs. Το `LangVersion` ορίζεται κεντρικά στο `Directory.Build.props`, μαζί με το `TargetFramework`.
+> **C# 10 note:** `LangVersion 10.0` forbids raw string literals (C#11), `required` members
+> (C#11), primary constructors (C#12) and collection expressions (C#12). File-scoped
+> namespaces, global usings and record structs are allowed. `LangVersion` is set centrally
+> in `Directory.Build.props`, together with `TargetFramework`.
 
-> **⚠ Κλείδωμα EF Core:** τα πακέτα `Pomelo.EntityFrameworkCore.MySql`, `Microsoft.EntityFrameworkCore.*` πρέπει να μείνουν στο **9.0.x**. Αναβάθμιση σε 10.x θα τραβήξει EF Core 10 και το Pomelo 9 θα σπάσει στο runtime (τα provider APIs αλλάζουν ανά major). Ξεκλειδώνει μόνο όταν βγει Pomelo για EF Core 10.
+> **⚠ EF Core lock:** the `Pomelo.EntityFrameworkCore.MySql` and
+> `Microsoft.EntityFrameworkCore.*` packages must stay on **9.0.x**. Upgrading to 10.x pulls
+> in EF Core 10 and Pomelo 9 breaks at runtime (provider APIs change between majors). This
+> unlocks only when a Pomelo build for EF Core 10 exists.
 
-### 2.1 Δομή repository
+### 2.1 Repository layout
 
 ```
 retrotools/
 ├─ RetroTools.sln
 ├─ src/
-│  ├─ RetroTools.Core/          # Domain: παλέτες, modes, codecs, validation. Χωρίς εξαρτήσεις.
+│  ├─ RetroTools.Core/          # Domain: palettes, modes, codecs, validation. No dependencies.
 │  ├─ RetroTools.Data/          # EF Core: entities, DbContext, migrations, repositories
-│  ├─ RetroTools.Web/           # MVC controllers + Views + Blazor components + wwwroot
-│  ├─ RetroTools.Configuration/ # πού ζουν τα secrets — κοινό, ώστε τα εργαλεία να συμφωνούν
-│  ├─ RetroTools.Secrets/       # CLI ρύθμισης secrets, self-contained για server χωρίς SDK
-│  └─ RetroTools.Migrator/      # CLI εφαρμογής migrations, self-contained
+│  ├─ RetroTools.Web/           # MVC controllers + views + Blazor components + wwwroot
+│  ├─ RetroTools.Configuration/ # where secrets live — shared, so the tools agree
+│  ├─ RetroTools.Secrets/       # secrets CLI, self-contained for servers without the SDK
+│  └─ RetroTools.Migrator/      # migrations CLI, self-contained
 ├─ tests/
-│  ├─ RetroTools.Core.Tests/
-│  └─ RetroTools.Data.Tests/    # integration tests με MariaDB
 ├─ docs/
-│  └─ platform-notes.md         # οι πίνακες του §3 σε αναλυτική μορφή
-├─ Directory.Build.props   # TargetFramework + LangVersion κεντρικά
+│  ├─ manual.md                 # user manual
+│  └─ oauth-setup.md            # creating the GitHub / Google keys
+├─ Directory.Build.props        # TargetFramework + LangVersion, centrally
 ├─ .gitignore
 ├─ plan.md
 └─ README.md
 ```
 
-### 2.2 Μοντέλο deployment
+### 2.2 Deployment model
 
-Self-hosted **ως service**, σε Windows ή Linux, πίσω από reverse proxy.
+Self-hosted **as a service**, on Windows or Linux, behind a reverse proxy.
 
-- **Windows:** `sc.exe create` → η εφαρμογή τρέχει με `UseWindowsService()`.
-- **Linux:** unit αρχείο systemd → `UseSystemd()`.
-  Και οι δύο κλήσεις είναι no-op όταν τρέχει από κονσόλα, οπότε το development δεν επηρεάζεται.
-- **Reverse proxy** (nginx / Apache / IIS ARR / Caddy) τερματίζει το TLS. Η εφαρμογή:
-  - διαβάζει `X-Forwarded-For` / `-Proto` / `-Host` μέσω `UseForwardedHeaders()`,
-  - δέχεται τα headers **μόνο** από ρητά δηλωμένους proxies (`KnownProxies` / `KnownNetworks` σε CIDR) — αλλιώς ο header είναι spoofable,
-  - υποστηρίζει `PathBase` για φιλοξενία κάτω από sub-path (π.χ. `/spritestudio`),
-  - απενεργοποιεί το εσωτερικό HTTPS redirect (`EnableHttpsRedirection: false`) αφού το κάνει ο proxy.
-- **Κρίσιμο για OAuth:** χωρίς σωστά forwarded headers τα redirect URIs βγαίνουν `http://` και τα GitHub/Google callbacks αποτυγχάνουν.
-- **Migrations χωρίς SDK:** το `dotnet ef` χρειάζεται SDK, αλλά μόνο για να *δημιουργήσει*
-  migrations. Για να τα *εφαρμόσει* αρκεί το EF Core runtime, οπότε το `RetroTools.Migrator`
-  τα κουβαλά μέσα του και δημοσιεύεται self-contained. Αρνείται να προχωρήσει αν η βάση
-  έχει migrations που δεν γνωρίζει — σημάδι ότι η βάση είναι νεότερη από τον κώδικα.
-  Ξεχωρίζει απρόσιτο διακομιστή από ανύπαρκτη βάση από βάση χωρίς δικαιώματα, γιατί οι
-  τρεις καταστάσεις έχουν διαφορετική λύση και ένα σκέτο «δεν συνδέομαι» δεν βοηθά.
-  Η δημιουργία βάσης απαιτεί ρητό `--create-database`: ένα τυπογραφικό στο όνομα δεν
-  πρέπει να φτιάχνει σιωπηλά μια άδεια βάση όπου όλα «δουλεύουν».
-- **WebSockets:** ο Blazor Server χρειάζεται WebSocket upgrade στον proxy (`proxy_set_header Upgrade/Connection` σε nginx), αλλιώς πέφτει σε long-polling με αισθητό latency στον editor.
-- **Data Protection keys:** πρέπει να επιμένουν σε δίσκο (ή στη βάση), αλλιώς κάθε restart ακυρώνει τα auth cookies.
-- Έτοιμα δείγματα (systemd unit, nginx site, Windows service) θα μπουν στο `docs/deploy/`.
+- **Windows:** `sc.exe create` → the application runs with `UseWindowsService()`.
+- **Linux:** a systemd unit file → `UseSystemd()`.
+  Both calls are no-ops when run from a console, so development is unaffected.
+- A **reverse proxy** (nginx / Apache / IIS ARR / Caddy) terminates TLS. The application:
+  - reads `X-Forwarded-For` / `-Proto` / `-Host` via `UseForwardedHeaders()`,
+  - accepts those headers **only** from explicitly declared proxies (`KnownProxies` /
+    `KnownNetworks` in CIDR form) — otherwise the header is spoofable,
+  - supports `PathBase` for hosting under a sub-path (e.g. `/spritestudio`),
+  - disables its internal HTTPS redirect (`EnableHttpsRedirection: false`) since the proxy
+    does it.
+- **Critical for OAuth:** without correct forwarded headers the redirect URIs come out as
+  `http://` and the GitHub/Google callbacks fail.
+- **Migrations without the SDK:** `dotnet ef` needs the SDK, but only to *create*
+  migrations. Applying them needs nothing but the EF Core runtime, so `RetroTools.Migrator`
+  carries it inside and publishes self-contained. It refuses to proceed if the database
+  holds migrations it does not know about — a sign the database is newer than the code.
+  It distinguishes an unreachable server from a missing database from a database without
+  permissions, because the three have different fixes and a bare "cannot connect" helps
+  with none of them. Creating a database requires an explicit `--create-database`: a typo
+  in the name must not silently produce an empty database where everything "works".
+- **WebSockets:** Blazor Server needs a WebSocket upgrade at the proxy
+  (`proxy_set_header Upgrade/Connection` in nginx), otherwise it falls back to long-polling
+  with noticeable latency in the editor.
+- **Data protection keys** must persist to disk (or to the database), otherwise every
+  restart invalidates the auth cookies.
+- Ready-made samples (systemd unit, nginx site, Windows service) will go into `docs/deploy/`.
 
 ---
 
-## 3. Μελέτη Πλατφορμών
+## 3. Platform study
 
-Αυτή είναι η **καρδιά** του εργαλείου: κάθε αριθμός εδώ γίνεται δεδομένο στο `PlatformCatalog` του `RetroTools.Core`.
+This is the **heart** of the tool: every number here becomes data in `PlatformCatalog`
+inside `RetroTools.Core`.
 
 ### 3.1 ZX Spectrum (48K/128K)
 
-#### Ανάλυση & χρώμα
-- Οθόνη **256 × 192** pixels.
-- **Δεν υπάρχει per-pixel χρώμα.** Η οθόνη χωρίζεται σε **32 × 24 attribute cells των 8×8 pixels**.
-- Κάθε cell έχει **ένα** attribute byte:
+#### Resolution & colour
+- Screen **256 × 192** pixels.
+- **There is no per-pixel colour.** The screen is divided into **32 × 24 attribute cells of
+  8×8 pixels**.
+- Each cell has **one** attribute byte:
 
 | Bit | 7 | 6 | 5–3 | 2–0 |
 |---|---|---|---|---|
-| Σημασία | FLASH | BRIGHT | PAPER (0–7) | INK (0–7) |
+| Meaning | FLASH | BRIGHT | PAPER (0–7) | INK (0–7) |
 
-- Άρα **μέγιστο 2 χρώματα ανά 8×8 cell**, και το BRIGHT ισχύει **και για τα δύο** μαζί. Αυτό είναι το περίφημο **attribute clash**.
-- Παλέτα: 8 βασικά χρώματα σε σειρά bit **GRB** (bit0=Blue, bit1=Red, bit2=Green) × 2 επίπεδα φωτεινότητας = **15 μοναδικά χρώματα** (bright black = black).
+- So **at most 2 colours per 8×8 cell**, and BRIGHT applies to **both** of them together.
+  This is the famous **attribute clash**.
+- Palette: 8 base colours in **GRB** bit order (bit0=Blue, bit1=Red, bit2=Green) × 2
+  brightness levels = **15 unique colours** (bright black = black).
 
-| # | Όνομα | Normal | Bright |
+| # | Name | Normal | Bright |
 |---|---|---|---|
 | 0 | Black | `#000000` | `#000000` |
 | 1 | Blue | `#0000D8` | `#0000FF` |
@@ -127,36 +149,43 @@ Self-hosted **ως service**, σε Windows ή Linux, πίσω από reverse pro
 | 6 | Yellow | `#D8D800` | `#FFFF00` |
 | 7 | White | `#D8D8D8` | `#FFFFFF` |
 
-> Το non-bright επίπεδο είναι ~85% της τάσης. Στη βιβλιογραφία εμφανίζεται είτε ως `0xD8` (Lospec) είτε ως `0xD7` (Fuse κ.ά.). Θα υλοποιηθεί ως **επιλέξιμο palette profile** (`D8` default, `D7` alternative), ώστε το preview να ταιριάζει με τον emulator του χρήστη.
+> The non-bright level is about 85% of full voltage. The literature gives it as either
+> `0xD8` (Lospec) or `0xD7` (Fuse and others). Implemented as a **selectable palette
+> profile** (`D8` default, `D7` alternative) so the preview matches the user's emulator.
 
 #### Sprites
-- **Δεν υπάρχουν hardware sprites.** Όλα είναι software sprites, σχεδιασμένα σε byte-aligned πλάτος.
-- Πρακτικοί περιορισμοί editor:
-  - Πλάτος: **πολλαπλάσιο του 8** (1 byte = 8 pixels). Επιτρεπτά: 8, 16, 24, 32, 48, 64.
-  - Ύψος: ελεύθερο σε pixels (τυπικά 8, 16, 21, 24, 32).
-  - Προαιρετικό **mask** (AND mask + OR data) για διαφάνεια — δεύτερο bitplane ίδιων διαστάσεων.
-- Χρώμα sprite: είτε **monochrome + attribute** ανά cell (κλασικό), είτε "colour sprite" όπου το εργαλείο κρατά ξεχωριστό attribute grid `ceil(w/8) × ceil(h/8)`.
+- **No hardware sprites.** Everything is a software sprite, drawn at a byte-aligned width.
+- Practical editor constraints:
+  - Width: a **multiple of 8** (1 byte = 8 pixels). Allowed: 8, 16, 24, 32, 48, 64.
+  - Height: free in pixels (typically 8, 16, 21, 24, 32).
+  - Optional **mask** (AND mask + OR data) for transparency — a second bitplane of the same
+    dimensions.
+- Sprite colour: either **monochrome + attribute** per cell (the classic approach), or a
+  "colour sprite" where the tool keeps a separate attribute grid of `ceil(w/8) × ceil(h/8)`.
 
-#### Μνήμη (για export)
-- Bitmap: 6144 bytes @ `0x4000`, μη γραμμικό layout σε 3 thirds:
+#### Memory (for export)
+- Bitmap: 6144 bytes at `0x4000`, non-linear layout in 3 thirds:
   ```
   addr = 0x4000 + ((y & 0xC0) << 5) + ((y & 0x07) << 8) + ((y & 0x38) << 2) + x_byte
   ```
-- Attributes: 768 bytes @ `0x5800`, γραμμικά: `0x5800 + (y >> 3) * 32 + x_byte`.
-- Το εργαλείο θα κάνει export **γραμμικά** (σειρά-σειρά, φιλικό για blitter routines) **και** προαιρετικά σε screen-layout σειρά.
+- Attributes: 768 bytes at `0x5800`, linear: `0x5800 + (y >> 3) * 32 + x_byte`.
+- The tool exports **linearly** (row by row, friendly to blitter routines) **and**
+  optionally in screen-layout order.
 
 #### Pixel aspect ratio
-1 : 1 (τετράγωνα pixels).
+1 : 1 (square pixels).
 
 ---
 
 ### 3.2 Commodore 64
 
-#### Χρώμα
-- VIC-II με **σταθερή παλέτα 16 χρωμάτων** (δεν αλλάζει — δεν υπάρχει programmable palette).
-- Χρησιμοποιούμε την **παλέτα Pepto** (η de-facto standard, υπολογισμένη από ανάλυση του VIC-II):
+#### Colour
+- VIC-II with a **fixed palette of 16 colours** (it cannot change — there is no
+  programmable palette).
+- We use the **Pepto palette** (the de-facto standard, calculated from analysis of the
+  VIC-II):
 
-| # | Όνομα | Hex | | # | Όνομα | Hex |
+| # | Name | Hex | | # | Name | Hex |
 |---|---|---|---|---|---|---|
 | 0 | Black | `#000000` | | 8 | Orange | `#6F4F25` |
 | 1 | White | `#FFFFFF` | | 9 | Brown | `#433900` |
@@ -167,52 +196,56 @@ Self-hosted **ως service**, σε Windows ή Linux, πίσω από reverse pro
 | 6 | Blue | `#352879` | | 14 | Light Blue | `#6C5EB5` |
 | 7 | Yellow | `#B8C76F` | | 15 | Light Grey | `#959595` |
 
-> Θα προβλεφθούν εναλλακτικά palette profiles (Colodore, VICE "Pepto NTSC") ως ρύθμιση προβολής — τα δεδομένα αποθηκεύονται πάντα ως δείκτες 0–15.
+> Alternative palette profiles (Colodore, VICE "Pepto NTSC") are provided for as a display
+> setting — the data is always stored as indices 0–15.
 
 #### Hardware sprites (MOBs)
-Η **μόνη** από τις τρεις πλατφόρμες με πραγματικά hardware sprites.
+The **only** one of the three platforms with real hardware sprites.
 
-| Χαρακτηριστικό | Hi-res | Multicolor |
+| Property | Hi-res | Multicolor |
 |---|---|---|
-| Διαστάσεις | **24 × 21** pixels | **12 × 21** (διπλού πλάτους pixels → 24 pixels οθόνης) |
+| Dimensions | **24 × 21** pixels | **12 × 21** (double-width pixels → 24 screen pixels) |
 | Bits/pixel | 1 | 2 |
-| Μέγεθος δεδομένων | 63 bytes (3 × 21), σε block 64 bytes | ίδιο |
-| Χρώματα | 1 + διαφάνεια | 3 + διαφάνεια |
+| Data size | 63 bytes (3 × 21), in a 64-byte block | same |
+| Colours | 1 + transparency | 3 + transparency |
 
-- **Πλήθος:** 8 ταυτόχρονα (0–7), max 8 ανά raster line χωρίς multiplexing.
-- **Χρώματα multicolor:**
-  | Bit pair | Πηγή χρώματος |
+- **Count:** 8 simultaneously (0–7), max 8 per raster line without multiplexing.
+- **Multicolor colours:**
+  | Bit pair | Colour source |
   |---|---|
-  | `00` | Διαφανές (φαίνεται το background) |
-  | `01` | `$D025` — Sprite Multicolor 0 (**κοινό για όλα τα sprites**) |
-  | `10` | `$D027+n` — χρώμα του συγκεκριμένου sprite |
-  | `11` | `$D026` — Sprite Multicolor 1 (**κοινό για όλα τα sprites**) |
-- **Expansion:** X (`$D01D`) και/ή Y (`$D017`) → εμφάνιση 48×21, 24×42 ή 48×42 (τα δεδομένα παραμένουν 24×21).
-- **Sprite pointers:** byte στο `screen_base + $03F8 + n`, τιμή = `data_address / 64`.
-- Το εργαλείο θα κρατά **shared palette slots** ανά project (MC0/MC1) και per-sprite χρώμα — ακριβώς όπως το hardware.
+  | `00` | Transparent (the background shows) |
+  | `01` | `$D025` — Sprite Multicolor 0 (**shared by all sprites**) |
+  | `10` | `$D027+n` — this sprite's own colour |
+  | `11` | `$D026` — Sprite Multicolor 1 (**shared by all sprites**) |
+- **Expansion:** X (`$D01D`) and/or Y (`$D017`) → displayed as 48×21, 24×42 or 48×42 (the
+  data stays 24×21).
+- **Sprite pointers:** a byte at `screen_base + $03F8 + n`, value = `data_address / 64`.
+- The tool keeps **shared palette slots** per project (MC0/MC1) and a per-sprite colour —
+  exactly like the hardware.
 
 #### Char / bitmap "sprites" (tiles)
-| Mode | Ανάλυση | Χρώματα |
+| Mode | Resolution | Colours |
 |---|---|---|
-| Standard text | 40×25 chars (8×8) | 1 χρώμα/char + κοινό background |
-| Multicolor text | 40×25 (pixels 4×8, διπλού πλάτους) | 3 κοινά + 1 per-char (από 0–7) |
-| Hi-res bitmap | 320×200 | 2 χρώματα ανά 8×8 cell |
-| Multicolor bitmap | 160×200 (pixels διπλού πλάτους) | 4 ανά 8×8 cell: `00`=$D021 κοινό, `01`=screen RAM hi-nibble, `10`=screen RAM lo-nibble, `11`=Colour RAM |
+| Standard text | 40×25 chars (8×8) | 1 colour/char + shared background |
+| Multicolor text | 40×25 (4×8 double-width pixels) | 3 shared + 1 per-char (from 0–7) |
+| Hi-res bitmap | 320×200 | 2 colours per 8×8 cell |
+| Multicolor bitmap | 160×200 (double-width pixels) | 4 per 8×8 cell: `00`=$D021 shared, `01`=screen RAM hi-nibble, `10`=screen RAM lo-nibble, `11`=Colour RAM |
 
 #### Pixel aspect ratio
-Hi-res 1:1 · Multicolor 2:1 (φαρδιά pixels).
+Hi-res 1:1 · Multicolor 2:1 (wide pixels).
 
 ---
 
 ### 3.3 Amstrad CPC (464 / 664 / 6128)
 
-#### Χρώμα
-- **27 χρώματα**: 3 επίπεδα (0% / 50% / 100%) × 3 κανάλια RGB = 3³ = 27.
-- Ο Gate Array δέχεται **32 hardware ink values (`0x40`–`0x5F`)** που χαρτογραφούνται στα 27 firmware χρώματα (5 διπλότυπα).
+#### Colour
+- **27 colours**: 3 levels (0% / 50% / 100%) × 3 RGB channels = 3³ = 27.
+- The Gate Array accepts **32 hardware ink values (`0x40`–`0x5F`)** which map onto the 27
+  firmware colours (5 duplicates).
 
-Πλήρης πίνακας (firmware # ↔ hardware value ↔ RGB @ 0/128/255):
+Full table (firmware # ↔ hardware value ↔ RGB at 0/128/255):
 
-| FW# | Όνομα | R,G,B % | Hex | HW value(s) |
+| FW# | Name | R,G,B % | Hex | HW value(s) |
 |---|---|---|---|---|
 | 0 | Black | 0,0,0 | `#000000` | `0x54` |
 | 1 | Blue | 0,0,50 | `#000080` | `0x44`, `0x50` |
@@ -242,104 +275,112 @@ Hi-res 1:1 · Multicolor 2:1 (φαρδιά pixels).
 | 25 | Pastel Yellow | 100,100,50 | `#FFFF80` | `0x43`, `0x49` |
 | 26 | Bright White | 100,100,100 | `#FFFFFF` | `0x4B` |
 
-> Στο πραγματικό υλικό το "50%" μετριέται πιο κοντά στο ~40% της τάσης. Θα υπάρξουν δύο palette profiles: **"Nominal"** (0/128/255, default) και **"Measured"** (πιο σκούρο mid-level) μόνο για την προβολή.
+> On real hardware the "50%" measures closer to ~40% of full voltage. Two palette profiles
+> exist: **"Nominal"** (0/128/255, default) and **"Measured"** (a darker mid-level), for
+> display only.
 
 #### Modes
-| Mode | Ανάλυση | Pens | Bits/pixel | Pixels/byte | Aspect |
+| Mode | Resolution | Pens | Bits/pixel | Pixels/byte | Aspect |
 |---|---|---|---|---|---|
-| 0 | 160 × 200 | 16 | 4 | 2 | 2:1 (φαρδιά) |
+| 0 | 160 × 200 | 16 | 4 | 2 | 2:1 (wide) |
 | 1 | 320 × 200 | 4 | 2 | 4 | 1:1 |
-| 2 | 640 × 200 | 2 | 1 | 8 | 1:2 (στενά) |
-| 3 (undocumented) | 160 × 200 | 4 | 4 (μόνο 2 χρήσιμα) | 2 | 2:1 |
+| 2 | 640 × 200 | 2 | 1 | 8 | 1:2 (narrow) |
+| 3 (undocumented) | 160 × 200 | 4 | 4 (only 2 useful) | 2 | 2:1 |
 
-- Η παλέτα οθόνης έχει **16 pens** (0–15) + **1 border ink**. Κάθε pen δείχνει σε ένα από τα 27 χρώματα. Στο Mode 1 χρησιμοποιούνται pens 0–3, στο Mode 2 pens 0–1.
-- Υποστηρίζεται **flashing ink** (εναλλαγή δύο χρωμάτων) — προαιρετικό πεδίο στην παλέτα.
+- The screen palette has **16 pens** (0–15) + **1 border ink**. Each pen points at one of
+  the 27 colours. Mode 1 uses pens 0–3, Mode 2 pens 0–1.
+- **Flashing ink** (alternating two colours) is supported — an optional field in the palette.
 
-#### Pixel encoding (κρίσιμο για export)
-Ο CPC έχει "μπερδεμένη" (interleaved) διάταξη bits μέσα στο byte:
+#### Pixel encoding (critical for export)
+The CPC has an interleaved bit layout inside the byte:
 
-- **Mode 0** — 2 pixels/byte, `A` = αριστερό, `B` = δεξί, `bN` = bit N της τιμής pen (0–15):
+- **Mode 0** — 2 pixels/byte, `A` = left, `B` = right, `bN` = bit N of the pen value (0–15):
   ```
   bit7 bit6 bit5 bit4 bit3 bit2 bit1 bit0
   A.b0 B.b0 A.b2 B.b2 A.b1 B.b1 A.b3 B.b3
   ```
-- **Mode 1** — 4 pixels/byte (`A`..`D` από αριστερά):
+- **Mode 1** — 4 pixels/byte (`A`..`D` from the left):
   ```
   A.b0 B.b0 C.b0 D.b0 A.b1 B.b1 C.b1 D.b1
   ```
-- **Mode 2** — 8 pixels/byte, ευθύ: bit7 = αριστερότερο pixel.
+- **Mode 2** — 8 pixels/byte, straight: bit7 = leftmost pixel.
 
-> **Ενοποιημένος κανόνας (υλοποιημένος στο M2):** και τα τρία modes περιγράφονται από έναν τύπο.
-> Το bit `k` του pen ενός pixel στη θέση `p` μέσα στο byte πηγαίνει στο bit `BitPositions[k] − p`,
-> με `BitPositions = { 7, 3, 5, 1 }`. Το Mode 1 χρησιμοποιεί τα δύο πρώτα, το Mode 2 μόνο το πρώτο
-> (και προκύπτει ως απλό MSB-first). Αυτό αντικαθιστά τρεις χωριστές υλοποιήσεις με μία, και
-> επαληθεύεται εξαντλητικά (256 συνδυασμοί ανά mode) έναντι του ρητού τύπου της τεκμηρίωσης.
+> **Unified rule (implemented in M2):** all three modes follow one formula. Bit `k` of the
+> pen of a pixel at position `p` inside the byte goes to bit `BitPositions[k] − p`, with
+> `BitPositions = { 7, 3, 5, 1 }`. Mode 1 uses the first two, Mode 2 only the first (and so
+> degenerates into plain MSB-first). This replaces three separate implementations with one,
+> and is verified exhaustively (256 combinations per mode) against the explicit formula from
+> the documentation.
 
 #### Sprites
-- **Δεν υπάρχουν hardware sprites** (πλην CPC Plus). Software sprites με **byte alignment**:
-  | Mode | Πλάτος πρέπει να είναι πολλαπλάσιο του |
+- **No hardware sprites** (except on the CPC Plus). Software sprites with **byte alignment**:
+  | Mode | Width must be a multiple of |
   |---|---|
   | 0 | **2** pixels |
   | 1 | **4** pixels |
   | 2 | **8** pixels |
-- Ύψος ελεύθερο. Τυπικά μεγέθη Mode 0: 4×16, 8×16, 16×16, 16×24, 32×32.
-- Προαιρετικό mask για transparency.
+- Height is free. Typical Mode 0 sizes: 4×16, 8×16, 16×16, 16×24, 32×32.
+- Optional mask for transparency.
 
-#### Μνήμη (για export)
-- 16 KB @ `0xC000` (default), 80 bytes/γραμμή, με 8 interleaved "banks":
+#### Memory (for export)
+- 16 KB at `0xC000` (default), 80 bytes per row, with 8 interleaved "banks":
   ```
   addr = base + ((y & 7) * 0x800) + ((y >> 3) * 0x50) + x_byte
   ```
 
 ---
 
-### 3.4 Συγκριτικός πίνακας
+### 3.4 Comparison table
 
 | | ZX Spectrum | Commodore 64 | Amstrad CPC |
 |---|---|---|---|
-| Παλέτα υλικού | 15 χρώματα (8×2 bright) | 16 σταθερά | 27 |
-| Programmable palette | Όχι | Όχι | **Ναι** (16 pens από 27) |
-| Χρώματα ταυτόχρονα (sprite area) | 2 ανά 8×8 cell | 4 ανά sprite (MC) | 16 (Mode 0) |
-| Hardware sprites | Όχι | **Ναι** (8 × 24×21) | Όχι |
-| Ανάλυση | 256×192 | 320×200 / 160×200 | 160/320/640 × 200 |
-| Attribute clash | **Ναι** (έντονο) | Ναι (σε bitmap/char modes) | **Όχι** |
-| Byte alignment sprite | 8 px | 8 px (24 για HW) | 2 / 4 / 8 px |
+| Hardware palette | 15 colours (8×2 bright) | 16 fixed | 27 |
+| Programmable palette | No | No | **Yes** (16 pens out of 27) |
+| Simultaneous colours (sprite area) | 2 per 8×8 cell | 4 per sprite (MC) | 16 (Mode 0) |
+| Hardware sprites | No | **Yes** (8 × 24×21) | No |
+| Resolution | 256×192 | 320×200 / 160×200 | 160/320/640 × 200 |
+| Attribute clash | **Yes** (severe) | Yes (in bitmap/char modes) | **No** |
+| Sprite byte alignment | 8 px | 8 px (24 for HW) | 2 / 4 / 8 px |
 | CPU / assembler export | Z80 (`defb`) | 6502 (`.byte`) | Z80 (`defb`) |
 
 ---
 
-## 4. Domain Model
+## 4. Domain model
 
 ```
-Project (1 πλατφόρμα + 1 mode)
- ├── Palette          ← ποια hardware χρώματα δείχνει κάθε slot/pen
+Project (1 platform + 1 mode)
+ ├── Palette          ← which hardware colour each slot/pen points at
  ├── Sprite *         ← w × h, N frames
- │    └── SpriteFrame *   ← pixel indices + (Spectrum) attributes + (προαιρ.) mask
- ├── SpriteGroup *    ← λογική ομάδα (π.χ. "Player", "Enemies")
- └── SpriteMap *      ← πλέγμα cols × rows από κελιά
-      └── SpriteMapCell * ← αναφορά σε Sprite/Frame + flags (flipX, flipY, priority)
+ │    └── SpriteFrame *   ← pixel indices + (Spectrum) attributes + (optional) mask
+ ├── SpriteGroup *    ← a logical group (e.g. "Player", "Enemies")
+ └── SpriteMap *      ← a cols × rows grid of cells
+      └── SpriteMapCell * ← a reference to a sprite/frame + flags (flipX, flipY, priority)
 ```
 
-### 4.1 Αναπαράσταση pixel δεδομένων
+### 4.1 Pixel data representation
 
-- Κάθε frame αποθηκεύεται ως **indexed buffer: 1 byte ανά pixel** = index στο palette slot (0–15).
-  - Απλό, ανεξάρτητο mode, εύκολο undo/redo και diff.
-  - Η μετατροπή σε packed hardware bytes γίνεται **μόνο στο export** από τα codecs.
-- Μέγεθος: 64×64 sprite = 4 KB → μια χαρά για `MEDIUMBLOB`. Εφαρμόζεται **Deflate** πριν την αποθήκευση (τυπικά >90% συμπίεση σε pixel art).
-- Container format `RSPR` (header 16 bytes: magic, version, w, h, encoding, flags) ώστε να αλλάξει μελλοντικά η κωδικοποίηση χωρίς migration.
+- Each frame is stored as an **indexed buffer: 1 byte per pixel** = an index into the
+  palette slot (0–15).
+  - Simple, mode-independent, easy to undo/redo and diff.
+  - Conversion to packed hardware bytes happens **only at export**, in the codecs.
+- Size: a 64×64 sprite is 4 KB → comfortable for a `MEDIUMBLOB`. **Deflate** is applied
+  before storage (typically >90% compression on pixel art).
+- An `RSPR` container format (16-byte header: magic, version, w, h, encoding, flags) so the
+  encoding can change in future without a migration.
 
 ### 4.2 Attributes (Spectrum)
 
-Ξεχωριστό buffer `ceil(w/8) × ceil(h/8)` bytes, ένα attribute byte ανά cell (ίδια bit διάταξη με το υλικό).
+A separate buffer of `ceil(w/8) × ceil(h/8)` bytes, one attribute byte per cell (the same
+bit layout as the hardware).
 
 ---
 
-## 5. Βάση Δεδομένων (MariaDB 11)
+## 5. Database (MariaDB 11)
 
-Charset: `utf8mb4`, collation `utf8mb4_unicode_ci`, engine InnoDB.
-Πρόθεμα πινάκων: κανένα (η βάση είναι αποκλειστική για την εφαρμογή).
+Charset `utf8mb4`, collation `utf8mb4_unicode_ci`, engine InnoDB.
+No table prefix (the database is dedicated to the application).
 
-### 5.1 Σχήμα (σκίτσο DDL)
+### 5.1 Schema (DDL sketch)
 
 ```sql
 CREATE TABLE platforms (
@@ -363,10 +404,10 @@ CREATE TABLE platform_modes (
   FOREIGN KEY (platform_code) REFERENCES platforms(code)
 );
 
--- Multi-user από την αρχή. Χωρίς ASP.NET Identity, χωρίς τοπικούς κωδικούς:
--- η ταυτοποίηση γίνεται αποκλειστικά μέσω GitHub / Google OAuth.
+-- Multi-user from the start. No ASP.NET Identity, no local passwords:
+-- authentication happens exclusively through GitHub / Google OAuth.
 CREATE TABLE users (
-  id            CHAR(36)     NOT NULL PRIMARY KEY,   -- δικό μας GUID, σταθερό
+  id            CHAR(36)     NOT NULL PRIMARY KEY,   -- our own stable GUID
   display_name  VARCHAR(128) NOT NULL,
   email         VARCHAR(256) NULL,
   avatar_url    VARCHAR(512) NULL,
@@ -375,10 +416,10 @@ CREATE TABLE users (
   is_disabled   TINYINT(1)   NOT NULL DEFAULT 0
 );
 
--- Ένας χρήστης μπορεί να συνδέει και GitHub και Google στον ίδιο λογαριασμό.
+-- One user can link both GitHub and Google to the same account.
 CREATE TABLE user_logins (
   provider      VARCHAR(32)  NOT NULL,               -- 'github' | 'google'
-  provider_key  VARCHAR(128) NOT NULL,               -- το σταθερό subject id του provider
+  provider_key  VARCHAR(128) NOT NULL,               -- the provider's stable subject id
   user_id       CHAR(36)     NOT NULL,
   linked_utc    DATETIME(3)  NOT NULL,
   PRIMARY KEY (provider, provider_key),
@@ -388,7 +429,7 @@ CREATE TABLE user_logins (
 
 CREATE TABLE projects (
   id            BIGINT AUTO_INCREMENT PRIMARY KEY,
-  owner_id      CHAR(36) NOT NULL,          -- multi-user: κάθε project ανήκει σε χρήστη
+  owner_id      CHAR(36) NOT NULL,          -- multi-user: every project belongs to a user
   visibility    TINYINT NOT NULL DEFAULT 0, -- 0=private, 1=unlisted, 2=public (read-only)
   name          VARCHAR(128) NOT NULL,
   description   VARCHAR(1024) NULL,
@@ -432,7 +473,7 @@ CREATE TABLE sprites (
   height_px  SMALLINT NOT NULL,
   palette_id BIGINT NULL,
   has_mask   TINYINT(1) NOT NULL DEFAULT 0,
-  meta_json  JSON NULL,             -- π.χ. C64: sprite colour, expandX/Y, multicolor
+  meta_json  JSON NULL,             -- e.g. C64: sprite colour, expandX/Y, multicolor
   sort_order INT NOT NULL DEFAULT 0,
   created_utc, updated_utc DATETIME(3) NOT NULL,
   KEY (project_id), KEY (group_id)
@@ -471,451 +512,465 @@ CREATE TABLE spritemap_cells (
 );
 ```
 
-Όλα τα FK με `ON DELETE CASCADE` προς τα κάτω από το `projects`.
+All foreign keys cascade downwards from `projects` with `ON DELETE CASCADE`.
 
-**Επιβολή ιδιοκτησίας (multi-user):** κάθε ερώτημα προς `sprites` / `spritemaps` / `palettes`
-περνά υποχρεωτικά μέσα από το `project_id` → `owner_id`. Θα υλοποιηθεί ως **EF Core global
-query filter** πάνω στο `projects` (`p => p.OwnerId == _currentUser.Id || p.Visibility == Public`),
-ώστε να μην μπορεί ένα ξεχασμένο `Where` να διαρρεύσει δεδομένα άλλου χρήστη. Τα API endpoints
-που δέχονται `id` κάνουν επιπλέον ρητό έλεγχο και επιστρέφουν **404 (όχι 403)** για ξένα
-αντικείμενα, ώστε να μη διαρρέει η ύπαρξή τους.
+**Ownership enforcement (multi-user):** every query against `sprites` / `spritemaps` /
+`palettes` necessarily goes through `project_id` → `owner_id`. Implemented as an **EF Core
+global query filter** on `projects`
+(`p => p.OwnerId == _currentUser.Id || p.Visibility == Public`), so a forgotten `Where`
+cannot leak another user's data. API endpoints that accept an `id` also check explicitly and
+return **404 (not 403)** for foreign objects, so their existence is never disclosed.
 
 ### 5.2 Migrations
 
-- EF Core migrations (`dotnet ef migrations add`), όχι hand-written SQL. ✅ `InitialSchema` εφαρμοσμένο.
-- Τα `platforms` / `platform_modes` γεμίζουν με **runtime seed** από τον `PlatformCatalog` σε κάθε
-  εκκίνηση, όχι με `HasData`. Έτσι μια διόρθωση στα δεδομένα υλικού δεν απαιτεί νέο migration.
-- **Τα migrations δεν εφαρμόζονται αυτόματα.** Η εκκίνηση ελέγχει αν εκκρεμούν και το καταγράφει
-  ως warning με την εντολή που πρέπει να τρέξει. Το `Database.Migrate()` σε κάθε εκκίνηση θα ήταν
-  επικίνδυνο σε production και θα δημιουργούσε συνθήκες ανταγωνισμού με πολλαπλά instances πίσω
-  από τον reverse proxy.
-- Η έκδοση του server δηλώνεται ρητά (`MariaDbServerVersion 11.4`) αντί για `AutoDetect`, που θα
-  άνοιγε σύνδεση στο startup και θα εμπόδιζε την εκκίνηση όταν η βάση είναι προσωρινά κάτω.
+- EF Core migrations (`dotnet ef migrations add`), not hand-written SQL. ✅ `InitialSchema`
+  applied.
+- `platforms` / `platform_modes` are filled by a **runtime seed** from `PlatformCatalog` on
+  every startup, not by `HasData`. That way correcting the hardware data needs no new
+  migration.
+- **Migrations are not applied automatically.** Startup checks whether any are pending and
+  logs a warning with the command to run. `Database.Migrate()` on every startup would be
+  dangerous in production and would create a race between multiple instances behind the
+  reverse proxy.
+- The server version is declared explicitly (`MariaDbServerVersion 11.4`) rather than
+  `AutoDetect`, which would open a connection at startup and prevent the application from
+  starting when the database is briefly down.
 
 ---
 
-## 6. Διαχείριση Credentials (απαίτηση: **τίποτα στο git**)
+## 6. Credential management (requirement: **nothing in git**)
 
-Στρατηγική τριών επιπέδων, με σειρά προτεραιότητας:
+A three-tier strategy, in priority order:
 
-1. **`dotnet user-secrets`** (κύριο, για development). ✅ *υλοποιημένο*
-   Το `RetroTools.Web.csproj` παίρνει `<UserSecretsId>`· τα secrets αποθηκεύονται στο
-   `%APPDATA%\Microsoft\UserSecrets\<id>\secrets.json` — **εκτός του repository**.
-   Το `RetroTools.Data.Tests.csproj` μοιράζεται το ίδιο `UserSecretsId`, ώστε τα integration
-   tests να βρίσκουν το ίδιο connection string χωρίς αντιγραφή.
+1. **`dotnet user-secrets`** (primary, for development). ✅ *implemented*
+   `RetroTools.Web.csproj` carries a `<UserSecretsId>`; the secrets are stored at
+   `%APPDATA%\Microsoft\UserSecrets\<id>\secrets.json` — **outside the repository**.
+   `RetroTools.Data.Tests.csproj` shares the same `UserSecretsId`, so the integration tests
+   find the same connection string without duplication.
    ```bash
    dotnet user-secrets set "ConnectionStrings:RetroTools" "Server=...;Port=3306;Database=DB_NAME;User ID=...;Password=...;" --project src/RetroTools.Web
    ```
-2. **Environment variables** (για deployment): `ConnectionStrings__RetroTools`.
-3. **`appsettings.Local.json`** (fallback), προστιθέμενο ρητά στο `.gitignore`.
+2. **Environment variables** (for deployment): `ConnectionStrings__RetroTools`.
+3. **`appsettings.Local.json`** (fallback), explicitly added to `.gitignore`.
 
-### 6.1 Ποια μυστικά υπάρχουν
+### 6.1 Which secrets exist
 
-| Κλειδί ρύθμισης | Τι είναι |
+| Configuration key | What it is |
 |---|---|
-| `ConnectionStrings:RetroTools` | Host, βάση, χρήστης, κωδικός MariaDB |
+| `ConnectionStrings:RetroTools` | MariaDB host, database, user, password |
 | `Authentication:GitHub:ClientId` / `:ClientSecret` | GitHub OAuth App |
 | `Authentication:Google:ClientId` / `:ClientSecret` | Google Cloud OAuth 2.0 Client |
 
-Και τα τρία ζευγάρια πάνε **αποκλειστικά** σε user-secrets ή environment variables.
-Αν λείπουν τα OAuth κλειδιά, ο αντίστοιχος provider απλώς **δεν καταχωρείται** — η εφαρμογή
-σηκώνεται κανονικά και δείχνει μόνο τα διαθέσιμα κουμπιά σύνδεσης.
+All three pairs go **exclusively** into user-secrets or environment variables. If the OAuth
+keys are missing, that provider is simply **not registered** — the application starts
+normally and shows only the available sign-in buttons.
 
-### 6.1.1 Ρύθμιση σε server χωρίς SDK
+### 6.1.1 Configuring a server without the SDK
 
-Το `dotnet user-secrets` είναι εντολή του **SDK**, που σε διακομιστή παραγωγής δεν
-υπάρχει — και αν η εφαρμογή τρέχει self-contained, ούτε καν το runtime.
+`dotnet user-secrets` is an **SDK** command, and a production server does not have the SDK —
+and if the application runs self-contained, not even the runtime.
 
-Το `RetroTools.Secrets` καλύπτει το κενό. Ο αποθηκευτικός χώρος των user-secrets δεν
-είναι κάτι εξωτικό: είναι ένα JSON αρχείο με επίπεδα κλειδιά, σε διαδρομή που ορίζει
-το λειτουργικό (`%APPDATA%\Microsoft\UserSecrets\<id>\` ή `~/.microsoft/usersecrets/<id>/`).
-Το εργαλείο γράφει **ακριβώς το ίδιο αρχείο**, οπότε τα δύο εργαλεία είναι εναλλάξιμα.
+`RetroTools.Secrets` fills the gap. The user-secrets store is not exotic: it is a JSON file
+with flat keys, at a path defined by the operating system
+(`%APPDATA%\Microsoft\UserSecrets\<id>\` or `~/.microsoft/usersecrets/<id>/`). The tool
+writes **exactly the same file**, so the two tools are interchangeable.
 
-Σχεδιαστικές αποφάσεις:
+Design decisions:
 
-| Απόφαση | Γιατί |
+| Decision | Why |
 |---|---|
-| Δημοσιεύεται **self-contained single file** | Ο server μπορεί να μην έχει καθόλου .NET· ένα εκτελέσιμο 37 MB αντιγράφεται και τρέχει |
-| Μόνο `MySqlConnector`, χωρίς EF Core | Το εργαλείο θέλει να ανοίξει μια σύνδεση, όχι να χαρτογραφήσει οντότητες |
-| `set` χωρίς τιμή διαβάζει από **stdin** | Ο κωδικός δεν μένει στο ιστορικό του shell |
-| Οι τιμές **κρύβονται** στην έξοδο | Η κονσόλα διακομιστή καταλήγει συχνά σε logs ή session recording |
-| `0600` στο αρχείο σε Unix | Χωρίς αυτό είναι αναγνώσιμο από κάθε λογαριασμό του μηχανήματος |
-| Το `import` **παραλείπει placeholders** | Ένα `Password=DB_PASSWORD` δεν πρέπει να γίνει ρύθμιση |
-| Έλεγχος OAuth **ανά ζεύγος** | Ένα ClientId χωρίς ClientSecret δεν είναι μισή ρύθμιση — ο provider σιωπηλά δεν εμφανίζεται |
-| Διακριτοί κωδικοί εξόδου (0/1/2) | Μπαίνει σε script εγκατάστασης |
+| Publishes as a **self-contained single file** | The server may have no .NET at all; a 37 MB executable is copied and runs |
+| `MySqlConnector` only, no EF Core | The tool wants to open a connection, not map entities |
+| `set` with no value reads from **stdin** | The password does not land in shell history |
+| Values are **masked** in output | A server console often ends up in logs or session recordings |
+| `0600` on the file on Unix | Without it, every account on the machine can read it |
+| `import` **skips placeholders** | A `Password=DB_PASSWORD` must not become a real setting |
+| OAuth checked **in pairs** | A ClientId without a ClientSecret is not half a configuration — the provider silently disappears |
+| Distinct exit codes (0/1/2) | It fits into a provisioning script |
 
-Το `test` δεν ελέγχει μόνο αν υπάρχει connection string αλλά **ανοίγει πραγματική
-σύνδεση**: λάθος κωδικός, κλειστό firewall ή λάθος όνομα βάσης φαίνονται μόνο έτσι.
+`test` does not merely check whether a connection string exists — it **opens a real
+connection**: a wrong password, a closed firewall or a wrong database name only show up that
+way.
 
-### 6.2 Εγγυήσεις
+### 6.1.2 Applying migrations without the SDK
 
-- ✅ Το committed `appsettings.json` **δεν** περιέχει connection string ούτε OAuth κλειδιά.
-- ✅ Committed template `appsettings.Local.json.example` με **placeholders μόνο**.
-- ✅ `.gitignore` με ρητό, σχολιασμένο section για secrets — δημιουργήθηκε **πριν** από κάθε commit.
-- ✅ Η εφαρμογή **αποτυγχάνει με καθαρό μήνυμα** στο startup αν λείπει το connection string
-  (`ConnectionStringProvider.Require`), αντί για `NullReferenceException` στο πρώτο query.
-- ✅ Τα logs τυπώνουν **μόνο το hostname** της βάσης, ποτέ ολόκληρο το connection string.
-- Pre-commit έλεγχος (προαιρετικό): `git diff --cached` grep για `Password=`.
+`RetroTools.Migrator` does the same for the schema. See §2.2 for the safety decisions:
+refusing unknown migrations, distinguishing the three connection failures, and requiring
+`--create-database` explicitly.
 
-### 6.3 Κατάσταση σύνδεσης — επαληθευμένη ✅
+### 6.2 Guarantees
 
-Τα smoke tests στο `RetroTools.Data.Tests` (3/3 πέρασαν) επιβεβαίωσαν:
+- ✅ The committed `appsettings.json` contains **no** connection string and no OAuth keys.
+- ✅ A committed `appsettings.Local.json.example` template with **placeholders only**.
+- ✅ A `.gitignore` with an explicit, commented section for secrets — created **before** any
+  commit.
+- ✅ The application **fails with a clear message** at startup if the connection string is
+  missing (`ConnectionStringProvider.Require`), rather than a `NullReferenceException` on the
+  first query.
+- ✅ The logs print **only the database hostname**, never the whole connection string.
+- A pre-commit check (optional): grep `git diff --cached` for `Password=`.
 
-| Έλεγχος | Αποτέλεσμα |
+### 6.3 Connection status — verified ✅
+
+The smoke tests in `RetroTools.Data.Tests` (3/3 passed) confirmed:
+
+| Check | Result |
 |---|---|
-| Σύνδεση & έκδοση | `11.4.3-MariaDB-deb11` |
-| Τρέχουσα βάση | `retrotools` |
+| Connection & version | `11.4.3-MariaDB-deb11` |
+| Current database | the dedicated application database |
 | Server charset | `utf8mb4` |
-| Δικαιώματα DDL | CREATE / INSERT / SELECT / DROP TABLE OK |
-| `MEDIUMBLOB` round-trip | OK (binary αναλλοίωτο) |
-| UTF-8 ελληνικά | OK |
-| EF Core 9 provider σε .NET 10 | OK |
+| DDL rights | CREATE / INSERT / SELECT / DROP TABLE OK |
+| `MEDIUMBLOB` round-trip | OK (binary unaltered) |
+| UTF-8 Greek text | OK |
+| EF Core 9 provider on .NET 10 | OK |
 
 ---
 
-## 7. Αρχιτεκτονική εφαρμογής
+## 7. Application architecture
 
-### 7.1 `RetroTools.Core` (χωρίς εξαρτήσεις)
+### 7.1 `RetroTools.Core` (no dependencies)
 
-| Namespace | Περιεχόμενο |
+| Namespace | Contents |
 |---|---|
-| `Platforms` | `PlatformDefinition`, `GraphicsMode`, `SpriteSizeRule`, `PixelAspect`, `PixelSlot`/`PixelSlotRole`, `PlatformCatalog` (static, τα δεδομένα του §3) |
-| `Palettes` | `Rgb24`, `HardwareColor`, `PaletteProfile` (ZX D8/D7, C64 Pepto, CPC Nominal/Measured), `HardwarePalette` με αντίστροφη αναζήτηση hardware→index και nearest-colour σε γραμμικό RGB |
-| `Model` | `SpriteModel`, `FrameBuffer`, `AttributeGrid`, `SpriteMapModel` |
+| `Platforms` | `PlatformDefinition`, `GraphicsMode`, `SpriteSizeRule`, `PixelAspect`, `PixelSlot`/`PixelSlotRole`, `PlatformCatalog` (static, the data from §3) |
+| `Palettes` | `Rgb24`, `HardwareColor`, `PaletteProfile` (ZX D8/D7, C64 Pepto, CPC Nominal/Measured), `HardwarePalette` with reverse hardware→index lookup and nearest-colour in linear RGB |
 | `Model` | `FrameBuffer` (indexed, 1 byte/pixel), `AttributeGrid` (ZX) |
-| `Imaging` | `PngWriter` — indexed PNG (colour type 3) γραμμένος από το μηδέν· εξυπηρετεί και τις μικρογραφίες του UI και το export PNG του §8, χωρίς εξάρτηση από imaging framework |
+| `Imaging` | `PngWriter` — indexed PNG (colour type 3) written from scratch; serves both the UI thumbnails and the PNG export of §8, with no imaging-framework dependency. `PngReader` + `ImageQuantizer` for import |
 | `Codecs` | `ISpriteCodec`, `SpriteCodecBase`, `CpcInterleavedCodec` (Mode 0/1/2/3), `LinearSpriteCodec` (C64 & ZX, MSB-first), `MaskCodec`, `SpriteCodecs` factory |
-| `Codecs.Export` | `AsmZ80Exporter`, `Asm6502Exporter`, `CHeaderExporter`, `BinExporter`, `PngExporter`, `JsonExporter` |
-| `Validation` | `ISpriteValidator` ανά πλατφόρμα (alignment, χρώματα/cell, clash detection) |
-| `Serialization` | `RsprContainer` (read/write, deflate) |
+| `Export` | `Z80AsmExporter`, `Acme6502Exporter`, `CHeaderExporter`, `BinaryExporter`, `PrgExporter`, `PngExporter`, `SpriteExporters` registry |
+| `Serialization` | `RsprContainer` (read/write, deflate), `ProjectDocument` + validator + serializer |
 
-**Το `Core` θα έχει το πυκνότερο unit-test coverage** — round-trip tests `encode(decode(x)) == x` για κάθε mode.
+**`Core` carries the densest unit-test coverage** — round-trip tests `encode(decode(x)) == x`
+for every mode.
 
 ### 7.2 `RetroTools.Data`
 
-- `RetroToolsDbContext`, entity configurations (Fluent API), repositories (`IProjectRepository`, `ISpriteRepository`, …), unit-of-work μέσω `DbContext`.
-- Optimistic concurrency με `row_version` στα `projects`/`sprites`.
+- `RetroToolsDbContext`, entity configurations (Fluent API), unit-of-work through the
+  `DbContext`.
+- Optimistic concurrency via `row_version` on `projects` / `sprites` / `spritemaps`.
 
 ### 7.3 `RetroTools.Web`
 
-**MVC μέρος** (controllers + Razor views):
-- `HomeController` — landing, επιλογή πλατφόρμας
-- `ProjectsController` — λίστα/δημιουργία/διαγραφή/duplicate projects
-- `LibraryController` — αναζήτηση sprites, tags
-- **API controllers** (`[ApiController]`, route `/api/...`):
+**MVC part** (controllers):
 
-| Endpoint | Μέθοδοι |
+| Endpoint | Methods |
 |---|---|
-| `/api/platforms` | GET (catalog: modes, παλέτες, περιορισμοί — τροφοδοτεί τον editor) |
+| `/api/platforms` | GET (catalog: modes, palettes, constraints — feeds the editor) |
 | `/api/projects` `/api/projects/{id}` | GET, POST, PUT, DELETE |
 | `/api/projects/{id}/sprites` | GET, POST |
 | `/api/sprites/{id}` | GET, PUT, DELETE |
 | `/api/sprites/{id}/frames/{index}` | GET, PUT (pixel buffer) |
 | `/api/spritemaps` `/api/spritemaps/{id}` | GET, POST, PUT, DELETE |
-| `/api/export/sprite/{id}?format=` | GET (`asm`, `bin`, `png`, `c`, `json`) |
-| `/api/export/spritemap/{id}?format=` | GET |
-| `/api/import` | POST (png / json / spd) |
+| `/api/export/sprite/{id}?format=` | GET (`bin`, `asm-z80`, `asm-6502`, `prg`, `c`, `png`) |
+| `/api/projects/{id}/document` · `/api/projects/import` | JSON project export / import |
+| `/api/projects/{id}/sprites/import-png` | POST (PNG import with quantization) |
 | `/signin/{provider}` `/signout` `/signin-github` `/signin-google` | OAuth challenge & callbacks |
-| `/api/me` | GET (τρέχων χρήστης, συνδεδεμένοι providers) |
+| `/api/me` | GET (current user, linked providers) |
 
-Όλα τα `/api/*` απαιτούν authenticated χρήστη πλην του `/api/platforms` (στατικά δεδομένα υλικού).
+Every `/api/*` route requires an authenticated user except `/api/platforms` (static hardware
+data).
 
-### 7.6 Ανάγνωση ≠ εγγραφή (η παγίδα των query filters)
+**Blazor part** (Interactive Server, per-page render mode):
+- `/editor/sprite/{id}` — the pixel editor
+- `/editor/spritemap/{id}` — the spritemap composer
 
-Τα global query filters του §5.2 αφήνουν να φανούν και τα **δημόσια** projects — σωστό
-για ανάγνωση. Αν όμως μια διαδρομή εγγραφής χρησιμοποιούσε το ίδιο ερώτημα, κάθε δημόσιο
-project θα γινόταν **εγγράψιμο από οποιονδήποτε**: το φίλτρο θα το επέστρεφε κανονικά και
-το `SaveChanges` θα περνούσε.
+### 7.4 The pixel editor (design detail)
 
-Γι' αυτό ο [`ProjectAccess`](src/RetroTools.Web/Services/ProjectAccess.cs) έχει δύο
-ξεχωριστές οικογένειες μεθόδων:
+The critical performance point. The design:
 
-| Μέθοδος | Τι επιστρέφει |
+- A JS module `wwwroot/js/pixel-canvas.js` owns the `<canvas>`, an offscreen `ImageData`
+  holding the indexed buffer, the zoom/pan and the mouse events.
+- The JS draws **immediately and locally** (zero latency) and sends the Blazor component
+  **batched deltas** on pointer-up.
+- The Blazor component holds the **authoritative** `FrameBuffer`, the undo/redo stack
+  (command pattern) and autosaves (debounced, ~1.5 s).
+- A palette/mode change → the server sends a new LUT to the JS and it redraws without
+  touching the pixel data.
+
+**Editor tools:** pencil, eraser, flood fill, line, rectangle (outline/filled), colour
+picker, grid overlays (pixel + 8×8 cell), zoom 2×–32×.
+
+**Panels:** palette picker (with a hardware colour chooser for CPC), frame timeline, sprite
+list, export buttons.
+
+### 7.4.1 Traps found during implementation (M5)
+
+Three mistakes that are invisible in the code but break in practice — recorded so they are
+not repeated:
+
+1. **`OnAfterRenderAsync(firstRender: true)` runs before the data loads.** With an async
+   `OnInitializedAsync`, the first render happens while the sprite is still `null` and the
+   canvas is not in the DOM. The usual `if (!firstRender) return;` guard then blocks
+   initialisation **forever**. The fix: initialise on the first render where both the data
+   and the element exist.
+2. **`byte[]` does not cross from JS to .NET as a plain array.** Blazor treats byte arrays
+   specially (it expects a reference to a binary transfer), so a `[1,2,3]` from JavaScript
+   fails deserialisation **with no console error** — the stroke simply never arrived. The
+   `[JSInvokable]` signatures use `int[]` and convert in C#.
+3. **`DbContextOptions` is scoped.** A singleton service consuming it takes the application
+   down at startup. `EditorDataService` is scoped.
+
+### 7.5 Authentication — why accounts are not linked automatically
+
+The obvious thing would be: if someone signs in with GitHub and their email matches an
+existing Google account, merge them. **We do not**, and that is a deliberate security
+decision.
+
+Auto-linking by email is a well-known account-takeover route: if a provider returns an email
+it has not verified, someone only has to claim the victim's email to gain access to all
+their projects. GitHub does not expose verification status on the basic endpoint, so we
+cannot even check it reliably.
+
+Instead:
+
+| Situation | Behaviour |
 |---|---|
-| `FindReadable*` | Δικά μου **και** δημόσια — βασίζεται στα query filters |
-| `FindWritable*` | **Μόνο** δικά μου — ρητός έλεγχος `OwnerId == currentUser` |
+| The login already exists (provider + key) | Normal sign-in, profile refresh |
+| Unknown login, unknown email | New account |
+| Unknown login, **known email** | **Abort** — the user is sent to `/account/link-required` with instructions to sign in with the original provider and link the second one from settings |
 
-Κάθε `POST` / `PUT` / `DELETE` περνά υποχρεωτικά από `FindWritable*`. Καλύπτεται από test
-που δημοσιοποιεί project, επιβεβαιώνει ότι ο άλλος χρήστης το διαβάζει, και ότι το `PUT`
-και το `DELETE` του δίνουν 404.
+Linking a second provider happens **only** from an already signed-in user
+(`UserProvisioningService.LinkAsync`), where identity is proven.
 
-**Γιατί 404 και όχι 403:** ένα 403 θα επιβεβαίωνε ότι το αντικείμενο υπάρχει, επιτρέποντας
-σε κάποιον να απαριθμήσει ids και να μάθει πόσα projects έχουν οι άλλοι. Το 404 δεν
-διαρρέει τίποτα.
+Four more timing and security details:
 
-**401 αντί για redirect στα API:** τα cookie events επιστρέφουν καθαρό 401/403 όταν η
-διαδρομή αρχίζει με `/api`. Ένα 302 προς HTML σελίδα σύνδεσης είναι άχρηστο για `fetch()`.
+- Provisioning runs in **`OnTicketReceived`**, not `OnCreatingTicket`: we must be able to
+  abort the sign-in **before** a cookie is issued. Otherwise the user would be left
+  authenticated with no matching account — seeing an empty application with no explanation.
+- **Sign-out is POST only**, with an antiforgery token. A GET `/signout` can be triggered by
+  an `<img src>` on a foreign page and throw the user out.
+- `returnUrl` goes through `Url.IsLocalUrl` — otherwise it is an open redirect, a
+  ready-made phishing tool with our domain as the bait.
+- Neither provider maps the profile picture by default; the claim actions for `avatar_url`
+  (GitHub) and `picture` (Google) are declared explicitly.
 
-**Blazor μέρος** (Interactive Server, per-page render mode):
-- `/editor/sprite/{id}` — ο pixel editor
-- `/editor/spritemap/{id}` — ο spritemap composer
+### 7.6 Read ≠ write (the query-filter trap)
 
-### 7.4 Ο pixel editor (σχεδιαστική λεπτομέρεια)
+The global query filters of §5.1 let **public** projects through — correct for reading. But
+if a write path used the same query, every public project would become **writable by
+anyone**: the filter would return it and `SaveChanges` would go through.
 
-Το κρίσιμο σημείο απόδοσης. Σχέδιο:
+That is why [`ProjectAccess`](src/RetroTools.Web/Services/ProjectAccess.cs) has two separate
+families of methods:
 
-- Ένα JS module `wwwroot/js/pixel-canvas.js` κατέχει: το `<canvas>`, ένα offscreen `ImageData` με το indexed buffer, το ζουμ/pan και τα mouse events.
-- Το JS ζωγραφίζει **άμεσα, τοπικά** (μηδενικό latency) και στέλνει στον Blazor component **batched deltas** (`{x, y, colorIndex}[]`) σε `requestAnimationFrame` / on mouse-up.
-- Ο Blazor component κρατά το **authoritative** `FrameBuffer`, το undo/redo stack (command pattern) και κάνει autosave (debounced, ~2 s) μέσω του repository.
-- Αλλαγή παλέτας/mode → ο server στέλνει νέο LUT στο JS, redraw χωρίς να αγγίξει τα pixel data.
-
-**Εργαλεία editor:** pencil, line, rectangle (filled/outline), ellipse, flood fill, colour-replace, select/move, flip H/V, rotate 90°, shift (wrap), grid overlay (pixel + 8×8 cell), onion skin, mirror/symmetry, zoom 1×–32×, εικόνα αναφοράς (reference image overlay).
-
-**Panels:** palette picker (με hardware color chooser για CPC), frame timeline + animation preview στο σωστό pixel aspect ratio, sprite list, layer "mask", validation warnings (live attribute-clash overlay για Spectrum, χρώματα > max για C64 MC).
-
-### 7.4.1 Παγίδες που εντοπίστηκαν στην υλοποίηση (M5)
-
-Τρία λάθη που δεν φαίνονται στον κώδικα αλλά σπάνε στην πράξη — καταγράφονται
-ώστε να μην επαναληφθούν:
-
-1. **`OnAfterRenderAsync(firstRender: true)` τρέχει πριν φορτώσουν τα δεδομένα.**
-   Με ασύγχρονο `OnInitializedAsync`, η πρώτη απόδοση γίνεται ενώ το sprite είναι
-   ακόμη `null` και το canvas δεν υπάρχει στο DOM. Ο συνηθισμένος έλεγχος
-   `if (!firstRender) return;` αποκλείει τότε την αρχικοποίηση **για πάντα**.
-   Σωστό: αρχικοποίηση στην πρώτη απόδοση όπου υπάρχουν και δεδομένα και στοιχείο.
-2. **Τα `byte[]` δεν περνούν από JS σε .NET ως απλά arrays.** Ο Blazor τα
-   μεταχειρίζεται ειδικά (περιμένει αναφορά σε δυαδική μεταφορά), οπότε ένα
-   `[1,2,3]` από JavaScript αποτυγχάνει στην αποσειριοποίηση **χωρίς σφάλμα στην
-   κονσόλα** — η πινελιά απλώς δεν έφτανε ποτέ. Οι υπογραφές `[JSInvokable]`
-   χρησιμοποιούν `int[]` και η μετατροπή γίνεται σε C#.
-3. **Το `DbContextOptions` είναι scoped.** Μια singleton υπηρεσία που το καταναλώνει
-   ρίχνει την εφαρμογή στο startup. Ο `EditorDataService` είναι scoped.
-
-### 7.5 Ταυτοποίηση — γιατί δεν δένουμε λογαριασμούς αυτόματα
-
-Το προφανές θα ήταν: αν κάποιος συνδεθεί με GitHub και το email του ταιριάζει με
-υπάρχοντα λογαριασμό Google, να τα ενώσουμε. **Δεν το κάνουμε**, και αυτό είναι
-συνειδητή απόφαση ασφαλείας.
-
-Το auto-linking βάσει email είναι γνωστός δρόμος κατάληψης λογαριασμού: αν ένας
-provider επιστρέψει email που δεν έχει επαληθεύσει, αρκεί κάποιος να δηλώσει το email
-του θύματος για να αποκτήσει πρόσβαση σε όλα του τα projects. Το GitHub δεν εκθέτει
-την κατάσταση επαλήθευσης στο βασικό endpoint, οπότε δεν μπορούμε καν να το ελέγξουμε
-αξιόπιστα.
-
-Αντ' αυτού:
-
-| Κατάσταση | Συμπεριφορά |
+| Method | What it returns |
 |---|---|
-| Υπάρχει ήδη η σύνδεση (provider + key) | Κανονική είσοδος, ενημέρωση προφίλ |
-| Άγνωστη σύνδεση, άγνωστο email | Νέος λογαριασμός |
-| Άγνωστη σύνδεση, **γνωστό email** | **Ματαίωση** — ο χρήστης οδηγείται στο `/account/link-required` με οδηγία να συνδεθεί με τον αρχικό provider και να δέσει τον δεύτερο από τις ρυθμίσεις |
+| `FindReadable*` | Mine **and** public — relies on the query filters |
+| `FindWritable*` | **Only** mine — an explicit `OwnerId == currentUser` check |
 
-Το δέσιμο δεύτερου provider γίνεται **μόνο** από ήδη συνδεδεμένο χρήστη
-(`UserProvisioningService.LinkAsync`), όπου η ταυτότητα είναι αποδεδειγμένη.
+Every `POST` / `PUT` / `DELETE` necessarily goes through `FindWritable*`. Covered by a test
+that publishes a project, confirms another user can read it, and that `PUT` and `DELETE`
+return 404 for them.
 
-Δύο ακόμη λεπτομέρειες χρονισμού και ασφάλειας:
+**Why 404 and not 403:** a 403 would confirm that the object exists, letting someone
+enumerate ids and learn how many projects other users have. A 404 leaks nothing.
 
-- Το provisioning τρέχει στο **`OnTicketReceived`**, όχι στο `OnCreatingTicket`: πρέπει να
-  μπορούμε να ματαιώσουμε τη σύνδεση **πριν** εκδοθεί cookie. Αλλιώς ο χρήστης θα έμενε
-  authenticated χωρίς αντίστοιχο λογαριασμό — θα έβλεπε μια άδεια εφαρμογή χωρίς εξήγηση.
-- Η **αποσύνδεση είναι μόνο POST** με antiforgery token. Ένα GET `/signout` μπορεί να
-  ενεργοποιηθεί από `<img src>` σε ξένη σελίδα και να πετάει τον χρήστη έξω.
-- Ο `returnUrl` περνά από `Url.IsLocalUrl` — αλλιώς είναι open redirect, δηλαδή έτοιμο
-  εργαλείο phishing με το domain μας ως δόλωμα.
-- Κανένας από τους δύο providers δεν χαρτογραφεί την εικόνα προφίλ από προεπιλογή·
-  δηλώνονται ρητά τα claim actions για `avatar_url` (GitHub) και `picture` (Google).
+**401 instead of a redirect on the API:** the cookie events return a clean 401/403 when the
+path starts with `/api`. A 302 to an HTML sign-in page is useless to `fetch()`.
 
 ---
 
-## 8. Export / Import
+## 8. Export / import
 
 ### 8.1 Export
 
-| Μορφή | Πλατφόρμες | Περιεχόμενο |
+| Format | Platforms | Contents |
 |---|---|---|
-| `.asm` Z80 | CPC, ZX | **rasm** διάλεκτος (επιλογή χρήστη): `defb`, labels ανά sprite/frame, equates για w/h. Το ίδιο output δέχονται και sjasmplus/pasmo. |
-| `.asm` 6502 | C64 | **ACME** διάλεκτος: `!byte`, sprite pointers, `*=` origin |
-| `.prg` | C64 | Δυαδικό με 2-byte load address — **φορτώνει απευθείας στον VICE** (`LOAD"*",8,1` ή drag & drop) |
-| `.bin` | όλες | Raw packed bytes, όπως θα κάθονταν στη μνήμη |
-| `.h` / `.c` | όλες | `const unsigned char sprite_x[] = {…}` (z88dk / cc65 / SDCC) |
-| `.png` | όλες | Preview με σωστό aspect ratio, x1/x2/x4 |
-| `.json` | όλες | Πλήρες project (lossless) — μορφή import/backup |
-| `.spd` | C64 | SpritePad συμβατότητα (stretch goal, M8) |
+| `.asm` Z80 | CPC, ZX | **rasm** dialect (user's choice): `defb`, labels per sprite/frame, equates for w/h. sjasmplus and pasmo accept the same output. |
+| `.asm` 6502 | C64 | **ACME** dialect: `!byte`, sprite pointers, `*=` origin |
+| `.prg` | C64 | Binary with a 2-byte load address — **loads straight into VICE** (`LOAD"*",8,1` or drag & drop) |
+| `.bin` | all | Raw packed bytes, as they would sit in memory |
+| `.h` / `.c` | all | `const unsigned char sprite_x[] = {…}` (z88dk / cc65 / SDCC) |
+| `.png` | all | Preview with the correct aspect ratio, x1/x2/x4 |
+| `.json` | all | Full project (lossless) — the import/backup format |
+| `.spd` | C64 | SpritePad compatibility (stretch goal, M8) |
 
-Επιλογές export: σειρά δεδομένων (row-major / column-major / screen-interleaved), συμπερίληψη mask, padding, χρώμα διαφάνειας, μπλοκ 64 bytes για C64.
+Export options: data order (row-major / column-major / screen-interleaved), mask inclusion,
+padding, transparency colour, 64-byte blocks for the C64.
 
 ### 8.2 Import
 
 #### JSON project ✅
 
-Πλήρες project σε ένα αρχείο `.retrotools.json`: αντίγραφο ασφαλείας, μεταφορά ανάμεσα
-σε εγκαταστάσεις, ή αρχείο δίπλα στον κώδικα του παιχνιδιού μέσα στο git.
+A full project in one `.retrotools.json`: a backup, a transfer between installations, or a
+file that sits in git next to your game's source.
 
-Αρχές σχεδίασης:
+Design principles:
 
-| Απόφαση | Γιατί |
+| Decision | Why |
 |---|---|
-| Pixels ως base64 του **ωμού indexed buffer**, όχι RSPR | Δημόσια μορφή ανταλλαγής· δεν πρέπει να δεσμεύεται από την εσωτερική μας κωδικοποίηση αποθήκευσης |
-| Τα `id` είναι **τοπικά του εγγράφου** | Ένα αρχείο δεν μπορεί να δείξει σε δεδομένα άλλου χρήστη· αντιστοιχίζονται σε νέα κατά την εισαγωγή |
-| Η εισαγωγή δημιουργεί **πάντα νέο** project | Δεν αντικαθιστά ποτέ δουλειά· ο ιδιοκτήτης είναι πάντα ο ανεβάζων, ό,τι κι αν λέει το αρχείο |
-| `format` και `version` **χωρίς προεπιλογή στο μοντέλο** | Αν έμπαιναν από initializer, η αποσειριοποίηση θα τα συμπλήρωνε μόνη της και **οποιοδήποτε JSON** θα περνούσε για project του RetroTools |
-| Άγνωστη έκδοση → απόρριψη | Μια σιωπηλά μισοδιαβασμένη δουλειά είναι χειρότερη από ένα καθαρό σφάλμα |
-| Όλα τα σφάλματα μαζί | Ο χρήστης διορθώνει μία φορά, όχι επτά |
-| Ρητά ανώτατα όρια (2048 sprites, 256 καρέ, 32 MB) | Χωρίς αυτά ένα κακόβουλο αρχείο εξαντλεί τη μνήμη πριν καν φτάσουμε στην επικύρωση |
+| Pixels as base64 of the **raw indexed buffer**, not RSPR | It is a public exchange format; it must not be bound to our internal storage encoding |
+| The `id`s are **document-local** | A file cannot point at another user's data; they are remapped on import |
+| Import **always creates a new** project | It never overwrites work; the owner is always the uploader, whatever the file says |
+| `format` and `version` have **no default in the model** | If they came from an initializer, deserialisation would fill them in and **any JSON** would pass as a RetroTools project |
+| Unknown version → rejection | Silently half-read work is worse than a clean error |
+| Every error at once | The user fixes once, not seven times |
+| Explicit upper limits (2048 sprites, 256 frames, 32 MB) | Without them a malicious file exhausts memory before validation is even reached |
 
-Ο validator ελέγχει επίσης ό,τι και το API: διαστάσεις έναντι `SpriteSizeRule`, τιμές
-pixel έναντι `MaxPixelValue`, μήκος attributes, ακεραιότητα αναφορών (ομάδες, κελιά →
-sprites) και μοναδικότητα αναγνωριστικών.
+The validator also checks what the API checks: dimensions against `SpriteSizeRule`, pixel
+values against `MaxPixelValue`, attribute lengths, referential integrity (groups, cells →
+sprites) and identifier uniqueness.
 
 #### PNG ✅
 
-Ο [`PngReader`](src/RetroTools.Core/Imaging/PngReader.cs) δέχεται και τους πέντε τύπους
-φίλτρων (None/Sub/Up/Average/Paeth), colour types 0/2/3/4/6 και βάθη 1 έως 16 bit.
-Το interlace (Adam7) **απορρίπτεται ρητά** με μήνυμα που λέει τι να κάνει ο χρήστης —
-είναι σπάνιο σε pixel art και θα διπλασίαζε την πολυπλοκότητα.
+[`PngReader`](src/RetroTools.Core/Imaging/PngReader.cs) accepts all five filter types
+(None/Sub/Up/Average/Paeth), colour types 0/2/3/4/6 and bit depths 1 to 16. Interlace
+(Adam7) is **explicitly rejected** with a message telling the user what to do — it is rare
+in pixel art and would double the complexity.
 
-Ο [`ImageQuantizer`](src/RetroTools.Core/Imaging/ImageQuantizer.cs) έχει δύο στρατηγικές:
+[`ImageQuantizer`](src/RetroTools.Core/Imaging/ImageQuantizer.cs) has two strategies:
 
-| Στρατηγική | Συμπεριφορά |
+| Strategy | Behaviour |
 |---|---|
-| **AutoAssign** (προεπιλογή) | Διαλέγει τα χρώματα υλικού που καλύπτουν καλύτερα την εικόνα. Πρώτα στρογγυλοποιεί κάθε χρώμα στο πλησιέστερο χρώμα υλικού και **μετά** μετρά συχνότητες — αλλιώς κοντινές αποχρώσεις που καταλήγουν στο ίδιο χρώμα υλικού θα σπαταλούσαν δύο slots |
-| **UseProjectPalette** | Η εικόνα προσαρμόζεται στα υπάρχοντα slots· η παλέτα δεν αλλάζει |
+| **AutoAssign** (default) | Picks the hardware colours that best cover the image. It rounds each colour to the nearest hardware colour **first** and then counts frequencies — otherwise near-identical shades that end at the same hardware colour would waste two slots |
+| **UseProjectPalette** | The image is fitted to the existing slots; the palette does not change |
 
-Η απόσταση μετριέται σε **γραμμικό** χώρο με συντελεστές φωτεινότητας: στον χώρο sRGB
-το 0x80 δεν είναι οπτικά μισό, οπότε μια απλή ευκλείδεια απόσταση θα διάλεγε συστηματικά
-λάθος αποχρώσεις — ακριβώς στα μεσαία επίπεδα του CPC.
+Distance is measured in **linear** space with luminance coefficients: in sRGB space `0x80`
+is not visually half, so a plain Euclidean distance would systematically pick the wrong
+shades — precisely at the CPC's mid levels.
 
-Τα διαφανή pixels πάνε στο slot διαφάνειας του mode· και το αντίστροφο, ένα αδιαφανές
-pixel δεν επιτρέπεται να καταλήξει εκεί επειδή έτυχε να μοιάζει με ό,τι έχει ανατεθεί.
+Transparent pixels go to the mode's transparent slot; conversely, an opaque pixel is never
+allowed to land there just because it happened to resemble whatever is assigned to it.
 
-#### Raw `.bin` — **εκκρεμεί**
+#### Raw `.bin` — **pending**
 
-Με ρητή δήλωση mode και διαστάσεων. Χαμηλής προτεραιότητας: το PNG και το JSON
-καλύπτουν τις πραγματικές ροές εργασίας.
+With an explicit mode and dimensions. Low priority: PNG and JSON cover the real workflows.
 
-### 8.3 Attribute clash: πού ελέγχεται πραγματικά
+### 8.3 Attribute clash: where it is actually checked
 
-Το M5 δήλωνε «live attribute-clash overlay» στον editor. **Ήταν λάθος** και ο έλεγχος
-αφαιρέθηκε: σε per-cell modes το indexed buffer κρατά ακριβώς `MaxColorsPerCell` δυνατές
-τιμές (0 = PAPER, 1 = INK στο Spectrum). Ένα κελί **δεν μπορεί** να αποκτήσει τρίτο χρώμα —
-το μοντέλο το αποκλείει εξ ορισμού, που είναι χαρακτηριστικό και όχι έλλειψη: το εργαλείο
-δεν μπορεί να παραγάγει sprite που δεν τρέχει.
+M5 claimed a "live attribute-clash overlay" in the editor. **That was wrong** and the check
+was removed: in per-cell modes the indexed buffer holds exactly `MaxColorsPerCell` possible
+values (0 = PAPER, 1 = INK on the Spectrum). A cell **cannot** acquire a third colour — the
+model rules it out by construction, which is a feature and not a gap: the tool cannot
+produce a sprite that does not run.
 
-Η πραγματική απώλεια χρωμάτων συμβαίνει στην **εισαγωγή εικόνας** και αναφέρεται εκεί,
-με αριθμούς: πόσα κελιά της πηγαίας εικόνας είχαν πάνω από το όριο και ποιο ήταν το χειρότερο.
+The real colour loss happens on **image import**, and is reported there with numbers: how
+many cells of the source image exceeded the limit and what the worst one was.
 
 ---
 
-## 9. Κανόνες Validation ανά πλατφόρμα
+## 9. Validation rules per platform
 
-| Κανόνας | ZX | C64 | CPC |
+| Rule | ZX | C64 | CPC |
 |---|---|---|---|
-| Width alignment | %8 | %8 (HW sprite: ακριβώς 24 ή 12) | %2 / %4 / %8 ανά mode |
-| Height | ελεύθερο | HW sprite: ακριβώς 21 | ελεύθερο |
-| Max χρώματα ανά 8×8 | 2 (+bright κοινό) | — | — |
-| Max χρώματα ανά sprite | — | 2 (hires) / 4 (MC) | 16 / 4 / 2 ανά mode |
-| Κοινά χρώματα | — | MC0/MC1 κοινά σε όλα τα sprites | — |
-| Δείκτης παλέτας εντός ορίων | ✔ | ✔ | ✔ |
+| Width alignment | %8 | %8 (HW sprite: exactly 24 or 12) | %2 / %4 / %8 per mode |
+| Height | free | HW sprite: exactly 21 | free |
+| Max colours per 8×8 | 2 (+shared bright) | — | — |
+| Max colours per sprite | — | 2 (hires) / 4 (MC) | 16 / 4 / 2 per mode |
+| Shared colours | — | MC0/MC1 shared across all sprites | — |
+| Palette index within range | ✔ | ✔ | ✔ |
 
-Τα warnings είναι **μη-μπλοκαριστικά** (ο χρήστης μπορεί να σχεδιάσει ελεύθερα) αλλά **μπλοκάρουν το export** εκτός αν επιλέξει "force".
+Warnings are **non-blocking** (the user can draw freely) but they **block export** unless
+"force" is chosen.
 
 ---
 
-## 10. Φάσεις υλοποίησης
+## 10. Implementation phases
 
-| Φάση | Παραδοτέο | Ορισμός "τελείωσε" |
+| Phase | Deliverable | Definition of done |
 |---|---|---|
-| **M0 – Setup** ✅ | Solution, 5 projects, `Directory.Build.props`, `.gitignore`, user-secrets, hosting για service/reverse-proxy, smoke tests MariaDB | ✅ `dotnet build` καθαρό (0 warnings)· 3/3 DB tests πράσινα· η εφαρμογή σηκώνεται και συνδέεται |
-| **M1 – Platform catalog** ✅ | `PlatformCatalog` με όλα τα δεδομένα του §3, palette profiles, `PixelSlot` roles | ✅ 121 unit tests πράσινα: 27 CPC χρώματα + base-3 invariant, 32 HW inks→27 FW, 15 ZX μοναδικά, 16 C64 Pepto, διάταξη μνήμης ZX, κοινοί καταχωρητές C64 |
-| **M2 – Codecs** ✅ | CPC Mode 0/1/2/3 interleaved packing, C64 hires/MC 63-byte, ZX bitmap + attributes + mask, `RsprContainer` | ✅ 204 tests πράσινα: εξαντλητικός έλεγχος 256 συνδυασμών ανά CPC mode έναντι ανεξάρτητου τύπου αναφοράς, round-trips, διατάξεις μνήμης CPC/ZX |
-| **M3 – Data layer** ✅ | 12 EF Core entities (μαζί με `users`/`user_logins`), migration `InitialSchema`, seeder από `PlatformCatalog`, global query filters ιδιοκτησίας σε **όλες** τις οντότητες | ✅ Το migration εφαρμόστηκε στη ζωντανή `retrotools`· 21 integration tests πράσινα, περιλαμβανομένων: ο Β δεν βλέπει project/sprite/frame του Α, BLOB round-trip, cascade, concurrency, utf8mb4 |
-| **M3.5 – Auth** ✅ | Cookie auth + GitHub & Google OAuth, `UserProvisioningService`, `/api/me`, `/account/*` | ✅ 12 tests provisioning· και οι δύο challenges ανακατευθύνουν σωστά (επαληθευμένο με ψεύτικα κλειδιά)· χωρίς κλειδιά η εφαρμογή σηκώνεται και αναφέρει `providers: false`. **Δεν** γίνεται αυτόματο δέσιμο λογαριασμών βάσει email — βλ. §7.5 |
-| **M4 – REST API** ✅ | `/api/platforms`, `/api/projects`, `/api/sprites`(+frames), `/api/spritemaps`, DTOs, validation έναντι `PlatformCatalog`, `ProjectAccess` | ✅ 21 integration tests πάνω από πραγματική HTTP pipeline: 401 αντί redirect, 404 αντί 403, **δημόσιο project αναγνώσιμο αλλά ποτέ εγγράψιμο**, επιβολή διαστάσεων & ορίων χρωμάτων |
-| **M5 – Pixel editor** ✅ | `pixel-canvas.js` + Blazor, 7 εργαλεία, undo/redo, autosave, palette panel, clash overlay, σελίδες projects/sprites | ✅ Επαληθευμένο στον browser: σχεδίαση → autosave → reload → τα pixels είναι εκεί· undo/redo ανά πινελιά· canvas 384×192 για sprite 16×16 (αναλογία 2:1 του Mode 0) |
-| **M6 – Groups & Spritemaps** ✅ | Ομάδες, spritemap composer με flip flags, `PngWriter` για μικρογραφίες | ✅ Επαληθευμένο: 4×4 spritemap, τοποθέτηση sprites, save, reload — τα κελιά είναι εκεί. Οι μικρογραφίες αποκωδικοποιούνται από τον browser (96×48, 176 bytes) |
-| **M7 – Export** ✅ | `.bin`, Z80 (rasm), 6502 (ACME), `.prg`, C header, PNG· API `/api/export` με φιλτράρισμα ανά πλατφόρμα· κουμπιά στον editor | ✅ 26 tests. C64 sprite → ακριβώς 63 bytes με σωστά bits· `.prg` με little-endian διεύθυνση φόρτωσης· CPC `.asm` με `defb &AA` και τιμές Gate Array στα σχόλια· επαληθευμένο κατέβασμα από τον browser |
-| **M7b – JSON project** ✅ | `ProjectDocument` + validator + serializer, `/api/projects/{id}/document`, `/api/projects/import`, UI | ✅ 31 tests. Round trip μέσω API με πανομοιότυπα pixels· ο ιδιοκτήτης είναι πάντα ο ανεβάζων· αλλοιωμένο αρχείο απορρίπτεται χωρίς να δημιουργηθεί τίποτα |
-| **M7c – Import PNG** ✅ | `PngReader` (5 φίλτρα, colour types 0/2/3/4/6, βάθη 1–16 bit), `ImageQuantizer` με αυτόματη ανάθεση παλέτας, API + UI | ✅ 38 tests. Κάθε τύπος φίλτρου δίνει πανομοιότυπη εικόνα· round trip με τον δικό μας writer· επαληθευμένο στον browser: gradient 256 χρωμάτων → 13 pens CPC |
-| **M8 – Deployment & polish** | systemd unit + Windows service + nginx δείγματα, data-protection keys, animation preview, clash overlay, tags/search, `.spd` | Η εφαρμογή τρέχει ως service πίσω από proxy με λειτουργικό OAuth |
+| **M0 – Setup** ✅ | Solution, 5 projects, `Directory.Build.props`, `.gitignore`, user-secrets, hosting for service/reverse-proxy, MariaDB smoke tests | ✅ `dotnet build` clean (0 warnings); 3/3 DB tests green; the application starts and connects |
+| **M1 – Platform catalog** ✅ | `PlatformCatalog` with all the data from §3, palette profiles, `PixelSlot` roles | ✅ 121 unit tests green: 27 CPC colours + the base-3 invariant, 32 HW inks→27 FW, 15 unique ZX, 16 C64 Pepto, ZX memory layout, C64 shared registers |
+| **M2 – Codecs** ✅ | CPC Mode 0/1/2/3 interleaved packing, C64 hires/MC 63-byte, ZX bitmap + attributes + mask, `RsprContainer` | ✅ 204 tests green: exhaustive check of 256 combinations per CPC mode against an independent reference formula, round-trips, CPC/ZX memory layouts |
+| **M3 – Data layer** ✅ | 12 EF Core entities (including `users`/`user_logins`), the `InitialSchema` migration, a seeder from `PlatformCatalog`, global ownership query filters on **every** entity | ✅ The migration was applied to the live database; 21 integration tests green, including: B cannot see A's project/sprite/frame, BLOB round-trip, cascade, concurrency, utf8mb4 |
+| **M3.5 – Auth** ✅ | Cookie auth + GitHub & Google OAuth, `UserProvisioningService`, `/api/me`, `/account/*` | ✅ 12 provisioning tests; both challenges redirect correctly (verified with dummy keys); with no keys the application starts and reports `providers: false`. Accounts are **not** linked automatically by email — see §7.5 |
+| **M4 – REST API** ✅ | `/api/platforms`, `/api/projects`, `/api/sprites`(+frames), `/api/spritemaps`, DTOs, validation against `PlatformCatalog`, `ProjectAccess` | ✅ 21 integration tests over the real HTTP pipeline: 401 instead of a redirect, 404 instead of 403, **a public project readable but never writable**, dimension and colour limits enforced |
+| **M5 – Pixel editor** ✅ | `pixel-canvas.js` + Blazor, 7 tools, undo/redo, autosave, palette panel, projects/sprites pages | ✅ Verified in the browser: draw → autosave → reload → the pixels are there; undo/redo per stroke; a 384×192 canvas for a 16×16 sprite (Mode 0's 2:1 ratio) |
+| **M6 – Groups & spritemaps** ✅ | Groups, spritemap composer with flip flags, `PngWriter` for thumbnails | ✅ Verified: a 4×4 spritemap, sprites placed, saved, reloaded — the cells are there. The thumbnails decode in the browser (96×48, 176 bytes) |
+| **M7 – Export** ✅ | `.bin`, Z80 (rasm), 6502 (ACME), `.prg`, C header, PNG; an `/api/export` API filtered per platform; buttons in the editor | ✅ 26 tests. A C64 sprite → exactly 63 bytes with the right bits; `.prg` with a little-endian load address; CPC `.asm` with `defb &AA` and Gate Array values in the comments; download verified from the browser |
+| **M7b – JSON project** ✅ | `ProjectDocument` + validator + serializer, `/api/projects/{id}/document`, `/api/projects/import`, UI | ✅ 31 tests. Round trip through the API with identical pixels; the owner is always the uploader; a tampered file is rejected without creating anything |
+| **M7c – PNG import** ✅ | `PngReader` (5 filters, colour types 0/2/3/4/6, depths 1–16 bit), `ImageQuantizer` with automatic palette assignment, API + UI | ✅ 38 tests. Every filter type yields an identical image; round trip with our own writer; verified in the browser: a 256-colour gradient → 13 CPC pens |
+| **M8 – Deployment & polish** | systemd unit + Windows service + nginx samples, data-protection keys, animation preview, tags/search, `.spd` | The application runs as a service behind a proxy with working OAuth |
 
-Κάθε φάση κλείνει με πράσινα tests και commit.
+Every phase closes with green tests and a commit.
 
 ---
 
 ## 11. Testing
 
-- **Unit (xUnit):** codecs (round-trip + γνωστά byte patterns), palette mapping, validators, RSPR container.
-- **Integration:** EF Core σε πραγματική MariaDB (ξεχωριστό ξεχωριστό schema δοκιμών ή transaction rollback ανά test).
-- **Χειροκίνητη επαλήθευση:** εξαγωγή C64 sprite → φόρτωμα σε VICE· CPC Mode 0 sprite → WinAPE· ZX → Fuse. Το πιο αξιόπιστο acceptance test.
+- **Unit (xUnit):** codecs (round-trip + known byte patterns), palette mapping, validators,
+  RSPR container, PNG reader/writer, exporters, project documents.
+- **Integration:** EF Core against a real MariaDB (a separate test schema or a transaction
+  rollback per test).
+- **Manual verification:** export a C64 sprite → load it in VICE; a CPC Mode 0 sprite →
+  WinAPE; ZX → Fuse. The most reliable acceptance test.
 
 ---
 
-## 12. Απόδοση & όρια
+## 12. Performance & limits
 
-- Max μέγεθος sprite: 128×128 (16 KB indexed) — αρκετά πάνω από ό,τι έχει νόημα εποχιακά.
-- Max frames ανά sprite: 64. Max sprites ανά project: 1024 (soft limits, configurable).
-- Autosave debounce 2 s· delta batching ανά frame· χωρίς `StateHasChanged` ανά pixel.
-- Response caching στο `/api/platforms` (στατικά δεδομένα).
+- Max sprite size: 128×128 (16 KB indexed) — well above anything period-appropriate.
+- Max frames per sprite: 64. Max sprites per project: 1024 (soft limits, configurable).
+- Autosave debounce 1.5 s; delta batching per stroke; no `StateHasChanged` per pixel.
+- Response caching on `/api/platforms` (static data).
 
 ---
 
-## 13. Ρίσκα & μετριασμοί
+## 13. Risks & mitigations
 
-| Ρίσκο | Μετριασμός |
+| Risk | Mitigation |
 |---|---|
-| Blazor Server latency στο ζωγράφισμα | JS canvas κατέχει το input loop· ο server βλέπει μόνο batched deltas |
-| Σύνδεση σε remote MariaDB (latency/διακοπές) | Connection resiliency (`EnableRetryOnFailure`), autosave με retry, τοπικό dirty state |
-| `LangVersion 10` σε .NET 10 templates | ✅ Επιβεβαιώθηκε στο M0: build καθαρό, 0 warnings· απαγορευμένα features καταγράφονται στο README |
-| **EF Core 9 πάνω σε .NET 10** (δεν υπάρχει Pomelo για EF 10) | ✅ Επαληθεύτηκε με live queries στη MariaDB 11.4.3. Τα πακέτα είναι καρφωμένα στο 9.0.x με σχόλιο στο `.csproj`. Έξοδος διαφυγής αν χρειαστεί: MySqlConnector + Dapper με DbUp migrations |
-| OAuth redirect URIs πίσω από proxy | `UseForwardedHeaders` με ρητούς `KnownProxies`· τεκμηρίωση στο `docs/deploy/` |
-| Blazor Server μέσω proxy χωρίς WebSockets | Δείγμα nginx config με upgrade headers· fallback long-polling τεκμηριωμένο ως γνωστό πρόβλημα |
-| Απόκλιση παλετών από τους emulators | Palette profiles ως ρύθμιση προβολής· τα δεδομένα αποθηκεύονται πάντα ως hardware indices |
-| Ακρίβεια CPC hardware ink table | Ο πίνακας §3.3 επαληθεύτηκε από cpctech/Grimware· καλύπτεται με unit test (32→27, 5 διπλότυπα) |
+| Blazor Server latency while drawing | The JS canvas owns the input loop; the server only sees batched deltas |
+| Connecting to a remote MariaDB (latency/outages) | Connection resiliency (`EnableRetryOnFailure`), autosave with retry, local dirty state |
+| `LangVersion 10` on .NET 10 templates | ✅ Confirmed in M0: clean build, 0 warnings; the forbidden features are documented in the README |
+| **EF Core 9 on .NET 10** (no Pomelo for EF 10) | ✅ Verified with live queries against MariaDB 11.4.3. The packages are pinned to 9.0.x with a comment in the `.csproj`. Escape hatch if needed: MySqlConnector + Dapper with DbUp migrations |
+| OAuth redirect URIs behind a proxy | `UseForwardedHeaders` with explicit `KnownProxies`; documented in `docs/deploy/` |
+| Blazor Server through a proxy without WebSockets | A sample nginx config with upgrade headers; the long-polling fallback documented as a known problem |
+| Palette divergence from the emulators | Palette profiles as a display setting; the data is always stored as hardware indices |
+| Accuracy of the CPC hardware ink table | The §3.3 table was verified against cpctech/Grimware; covered by a unit test (32→27, 5 duplicates) |
 
 ---
 
-## 14. Μελλοντικά extensions
+## 14. Future extensions
 
-- ZX: ULAplus (64 χρώματα), Timex hi-colour/hi-res, ZX Spectrum Next (256 χρώματα, hardware sprites 16×16).
+- ZX: ULAplus (64 colours), Timex hi-colour/hi-res, ZX Spectrum Next (256 colours, 16×16
+  hardware sprites).
 - C64: char/tile editor, SpritePad + CharPad import/export, sprite multiplexer preview.
-- CPC: CPC Plus (4096 χρώματα, 16 hardware sprites), rasters/split palettes, OCP Art Studio.
-- Γενικά: κοινόχρηστη βιβλιοθήκη sprites, versioning/history, εξαγωγή σε tilemap engines, PWA/offline.
+- CPC: CPC Plus (4096 colours, 16 hardware sprites), rasters/split palettes, OCP Art Studio.
+- General: a shared sprite library, versioning/history, export to tilemap engines,
+  PWA/offline.
 
 ---
 
-## 15. Αποφάσεις (κλειστά ερωτήματα)
+## 15. Decisions (closed questions)
 
-| # | Ερώτημα | Απόφαση | Επίπτωση στο πλάνο |
+| # | Question | Decision | Impact on the plan |
 |---|---|---|---|
-| 1 | Λογαριασμοί χρηστών | **Multi-user από την αρχή**, login με **GitHub** και **Google** | Νέοι πίνακες `users` / `user_logins` (§5.1)· νέα φάση **M3.5**· `owner_id` γίνεται `NOT NULL`· global query filter ιδιοκτησίας· **χωρίς** ASP.NET Identity (θα έσπαγε το Pomelo) |
-| 2 | Target framework | **net10.0** + `LangVersion 10.0` | EF Core καρφωμένο στο 9.0.x — επαληθευμένο ότι δουλεύει (§2) |
-| 3 | Προτεραιότητα πλατφόρμας | **Και οι τρεις παράλληλα** ανά φάση | Καμία — ήταν ήδη η υπόθεση του πλάνου |
-| 4 | Assembler διάλεκτοι | Z80 → **rasm**· C64 → **VICE** | §8.1 |
-| 5 | Deployment | **Self-hosted service** (Windows Service / systemd) πίσω από **reverse proxy** | Νέο §2.2· `UseWindowsService()` + `UseSystemd()` + forwarded headers + PathBase — υλοποιημένα στο M0· δείγματα configs στο M8 |
+| 1 | User accounts | **Multi-user from the start**, sign-in with **GitHub** and **Google** | New `users` / `user_logins` tables (§5.1); a new **M3.5** phase; `owner_id` becomes `NOT NULL`; a global ownership query filter; **no** ASP.NET Identity (it would break Pomelo) |
+| 2 | Target framework | **net10.0** + `LangVersion 10.0` | EF Core pinned to 9.0.x — verified to work (§2) |
+| 3 | Platform priority | **All three in parallel** per phase | None — that was already the plan's assumption |
+| 4 | Assembler dialects | Z80 → **rasm**; C64 → **VICE** | §8.1 |
+| 5 | Deployment | **Self-hosted service** (Windows Service / systemd) behind a **reverse proxy** | New §2.2; `UseWindowsService()` + `UseSystemd()` + forwarded headers + PathBase — implemented in M0; sample configs in M8 |
 
-### 15.1 Διευκρίνιση για το C64 export
+### 15.1 A clarification about C64 export
 
-Ο **VICE είναι emulator, όχι assembler** — δεν υπάρχει "διάλεκτος VICE" για πηγαίο κώδικα.
-Ερμηνεύω την απάντηση ως *«το export πρέπει να δουλεύει με τον VICE»* και παραδίδω **δύο** πράγματα:
+**VICE is an emulator, not an assembler** — there is no "VICE dialect" for source code. I
+read the answer as *"the export must work with VICE"* and deliver **two** things:
 
-1. **`.prg`** — δυαδικό με 2-byte load address, φορτώνει κατευθείαν στον VICE (drag & drop ή `LOAD"*",8,1`).
-   Αυτό είναι το «τρέχει στον VICE» παραδοτέο.
-2. **`.asm` σε ACME** — η πιο διαδεδομένη ανοιχτή διάλεκτος 6502 στη σκηνή του C64, για όποιον
-   θέλει πηγαίο κώδικα.
+1. **`.prg`** — a binary with a 2-byte load address, loads straight into VICE (drag & drop or
+   `LOAD"*",8,1`). This is the "runs in VICE" deliverable.
+2. **`.asm` in ACME** — the most widespread open 6502 dialect in the C64 scene, for anyone
+   who wants source.
 
-Αν εννοούσες συγκεκριμένα **KickAssembler** ή τη σύνταξη του **VICE monitor** (`a c000 lda #$00`),
-πες το και προσθέτω τον exporter — είναι μικρή δουλειά αφού τα bytes παράγονται ήδη από τα codecs.
+If you specifically meant **KickAssembler** or the **VICE monitor** syntax
+(`a c000 lda #$00`), say so and I will add that exporter — it is small work now that the
+codecs already produce the bytes.
 
-### 15.2 Τι χρειάζομαι από εσένα για το M3.5 (auth)
+### 15.2 What is needed for M3.5 (auth)
 
-Δύο OAuth applications — τα δημιουργείς εσύ, τα ClientId/ClientSecret μπαίνουν σε user-secrets:
+Two OAuth applications — you create them, the ClientId/ClientSecret go into user-secrets.
+Step-by-step instructions are in [docs/oauth-setup.md](docs/oauth-setup.md).
 
-- **GitHub:** Settings → Developer settings → OAuth Apps → New. Callback URL: `https://<domain>/signin-github`
-- **Google:** Google Cloud Console → APIs & Services → Credentials → OAuth client ID (Web).
-  Authorized redirect URI: `https://<domain>/signin-google`
-
-Για τοπική ανάπτυξη χρησιμοποίησε `https://localhost:7xxx/signin-github` κ.λπ.
-Μέχρι να τα δώσεις, η εφαρμογή σηκώνεται κανονικά — απλώς δεν εμφανίζει τα κουμπιά σύνδεσης.
-
+Until you supply them the application starts normally — it just does not show the sign-in
+buttons.
 
 ---
 
-## Πηγές
+## Sources
 
-- [Gate Array – cpctech](https://cpctech.cpcwiki.de/docs/garray.html) (πίνακας hardware ink 0x40–0x5F ↔ firmware 0–26)
-- [Gate Array – Grimware](https://www.grimware.org/doku.php/documentations/devices/gatearray) (pixel bit encoding Mode 0/1/2)
-- [Calculating the color palette of the VIC-II – Pepto](https://www.pepto.de/projects/colorvic/) (C64 παλέτα)
+- [Gate Array – cpctech](https://cpctech.cpcwiki.de/docs/garray.html) (the hardware ink table 0x40–0x5F ↔ firmware 0–26)
+- [Gate Array – Grimware](https://www.grimware.org/doku.php/documentations/devices/gatearray) (pixel bit encoding for Modes 0/1/2)
+- [Calculating the color palette of the VIC-II – Pepto](https://www.pepto.de/projects/colorvic/) (the C64 palette)
 - [ZX Spectrum Palette – Lospec](https://lospec.com/palette-list/zx-spectrum)
 - [ZX Spectrum graphic modes – Wikipedia](https://en.wikipedia.org/wiki/ZX_Spectrum_graphic_modes)
 - [The ZX Spectrum Color Palette, Resolution and Attributes – retrotechlab](https://www.retrotechlab.com/the-zx-spectrum-color-palette-resolution-and-attributes/)

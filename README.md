@@ -1,84 +1,97 @@
 # RetroTools — Sprite & Spritemap Studio
 
-Web εργαλείο σχεδίασης **sprites** και **spritemaps** για τους 8-bit υπολογιστές
-**Amstrad CPC**, **Commodore 64** και **ZX Spectrum**, με σεβασμό στους αυθεντικούς
-περιορισμούς κάθε μηχανής (παλέτες υλικού, γραφικά modes, byte alignment, attribute clash).
+> **Language:** English · [Ελληνικά](README.el.md)
 
-> **Κατάσταση: πλήρες** — φτιάχνεις project, σχεδιάζεις sprites ή **τα εισάγεις από PNG**,
-> τα οργανώνεις σε ομάδες και spritemaps, τα **εξάγεις σε κώδικα που τρέχει**, και παίρνεις
-> **πλήρες αντίγραφο ασφαλείας σε JSON**.
-> **369 tests πράσινα**, 82 πάνω σε πραγματική MariaDB.
-> Δες το [plan.md](plan.md) για τη μελέτη και ό,τι απομένει.
+A web tool for designing **sprites** and **spritemaps** for the 8-bit machines
+**Amstrad CPC**, **Commodore 64** and **ZX Spectrum**, respecting each machine's
+authentic constraints (hardware palettes, graphics modes, byte alignment,
+attribute clash).
+
+> **Status: complete end to end** — create a project, draw sprites or **import them
+> from PNG**, organise them into groups and spritemaps, **export them as code that
+> runs**, and take a **full JSON backup**.
+> **392 tests green**, 82 of them against a real MariaDB.
+> See [plan.md](plan.md) for the technical study and what remains.
 
 ---
 
-## Τι κάνει
+## Documentation
 
-- **Pixel editor** με ζουμ, εργαλεία σχεδίασης, undo/redo, frames & animation preview,
-  και σωστό **pixel aspect ratio** ανά mode (τα CPC Mode 0 pixels *είναι* φαρδιά).
-- **Παλέτες υλικού**: 27 χρώματα CPC (με programmable pens), 16 σταθερά C64 (Pepto),
-  15 ZX Spectrum (8 βασικά × BRIGHT).
-- **Εισαγωγή από PNG** με αυτόματη επιλογή των καταλληλότερων χρωμάτων υλικού, και
-  ειλικρινή αναφορά τι χάθηκε: πόσα χρώματα στρογγυλοποιήθηκαν, πόσα κελιά ξεπερνούσαν
-  το όριο του Spectrum.
-- **Επιβολή περιορισμών υλικού**: το εργαλείο δεν σε αφήνει να φτιάξεις sprite που δεν
-  τρέχει — byte alignment ανά mode, καρφωμένες διαστάσεις για τα hardware sprites του C64,
-  όρια χρωμάτων ανά mode.
-- **Groups & Spritemaps**: οργάνωση sprites σε ομάδες και σε πλέγματα (animation strips,
+| Document | What it covers |
+|---|---|
+| [**User manual**](docs/manual.md) | How to use the tool: platforms, editor, spritemaps, export |
+| [OAuth setup](docs/oauth-setup.md) | Creating the GitHub and Google login keys, step by step |
+| [plan.md](plan.md) | Hardware study, architecture, every design decision and why |
+
+---
+
+## What it does
+
+- **Pixel editor** with zoom, drawing tools, undo/redo, frames and animation preview,
+  and the correct **pixel aspect ratio** per mode (CPC Mode 0 pixels really *are* wide).
+- **Hardware palettes**: 27 CPC colours (with programmable pens), 16 fixed C64 colours
+  (Pepto), 15 ZX Spectrum colours (8 base × BRIGHT).
+- **PNG import** that automatically picks the best-matching hardware colours and reports
+  honestly what was lost: how many colours were rounded, how many cells exceeded the
+  Spectrum's limit.
+- **Hardware constraints are enforced**: the tool will not let you build a sprite that
+  cannot run — byte alignment per mode, fixed dimensions for C64 hardware sprites,
+  colour limits per mode.
+- **Groups & spritemaps**: organise sprites into groups and grids (animation strips,
   tilesets, character sets).
-- **Save / Load** σε MariaDB.
-- **Export** σε Z80 `defb` (rasm), 6502 (ACME), `.prg` που φορτώνει σε VICE, raw `.bin`,
-  C headers και PNG. Κάθε πλατφόρμα βλέπει μόνο τις μορφές που της ταιριάζουν.
-  Ο πηγαίος κώδικας φέρει σχόλια με τις **τιμές υλικού** της παλέτας — ό,τι χρειάζεται
-  ο προγραμματιστής για να στήσει την οθόνη.
-- **Αντίγραφο ασφαλείας σε JSON**: ολόκληρο project (sprites, καρέ, παλέτα, ομάδες,
-  spritemaps) σε ένα αρχείο `.retrotools.json` που μπαίνει σε git δίπλα στον κώδικα
-  του παιχνιδιού και ξαναφορτώνεται όποτε θες.
-- **Multi-user** με σύνδεση GitHub / Google· κάθε project ανήκει στον χρήστη του.
-- **Δύο εργαλεία για server χωρίς εγκατεστημένο .NET**, ως αυτοτελή εκτελέσιμα:
-  [`retrotools-secrets`](#ρύθμιση-σε-server-χωρίς-net-sdk) για τις ρυθμίσεις (δοκιμάζει
-  και την πραγματική σύνδεση) και [`retrotools-migrate`](#δημιουργία-σχήματος) για τα
-  migrations. Και τα δύο αντικαθιστούν εντολές του SDK που δεν υπάρχει στην παραγωγή.
+- **Save / load** to MariaDB.
+- **Export** to Z80 `defb` (rasm), 6502 (ACME), a `.prg` that loads in VICE, raw `.bin`,
+  C headers and PNG. Each platform is offered only the formats that apply to it.
+  The generated source carries comments with the palette's **hardware values** — what a
+  programmer actually needs to set up the screen.
+- **JSON backup**: an entire project (sprites, frames, palette, groups, spritemaps) in
+  one `.retrotools.json` file that sits in git next to your game's source and reloads
+  whenever you want.
+- **Multi-user** with GitHub / Google sign-in; every project belongs to its owner.
+- **Two tools for servers with no .NET installed**, as self-contained executables:
+  [`retrotools-secrets`](#configuring-a-server-without-the-net-sdk) for settings (it also
+  tests the real database connection) and [`retrotools-migrate`](#creating-the-schema) for
+  migrations. Both replace SDK commands that do not exist in production.
 
-## Υποστηριζόμενες πλατφόρμες — περίληψη
+## Supported platforms — summary
 
 | | ZX Spectrum | Commodore 64 | Amstrad CPC |
 |---|---|---|---|
-| Παλέτα | 15 χρώματα | 16 σταθερά | 27 (16 pens επιλέξιμα) |
-| Modes | 256×192, attribute 8×8 | hires 320×200 · multicolor 160×200 | Mode 0 160×200/16 · Mode 1 320×200/4 · Mode 2 640×200/2 |
+| Palette | 15 colours | 16 fixed | 27 (16 selectable pens) |
+| Modes | 256×192, 8×8 attributes | hires 320×200 · multicolor 160×200 | Mode 0 160×200/16 · Mode 1 320×200/4 · Mode 2 640×200/2 |
 | Hardware sprites | — | 8 × 24×21 (hires) / 12×21 (multicolor) | — |
-| Sprite alignment | πλάτος %8 | πλάτος %8 (HW: 24) | πλάτος %2 / %4 / %8 ανά mode |
+| Sprite alignment | width %8 | width %8 (HW: 24) | width %2 / %4 / %8 per mode |
 
-Αναλυτικά (bit layouts, διευθύνσεις μνήμης, πίνακες χρωμάτων): [plan.md §3](plan.md).
+For details (bit layouts, memory addresses, colour tables) see [plan.md §3](plan.md).
 
 ---
 
 ## Stack
 
-- **C# 10** (`LangVersion 10.0`) σε **.NET 10**
+- **C# 10** (`LangVersion 10.0`) on **.NET 10**
 - **ASP.NET Core MVC** (site + REST API) + **Blazor** Interactive Server (editor)
-- **HTML canvas** + JS module για το per-pixel input loop
+- **HTML canvas** + a JS module for the per-pixel input loop
 - **EF Core 9** + **Pomelo.EntityFrameworkCore.MySql 9.0.0** → **MariaDB 11**
-- **Cookie auth + OAuth** (GitHub, Google) — χωρίς ASP.NET Identity
-- **xUnit** για tests
-- Self-hosted ως **Windows Service / systemd**, πίσω από reverse proxy
-- `retrotools-secrets`: αυτοτελές CLI (self-contained single file) για ρύθμιση σε
-  server χωρίς .NET
+- **Cookie auth + OAuth** (GitHub, Google) — no ASP.NET Identity
+- **xUnit** for tests
+- Self-hosted as a **Windows Service / systemd** unit behind a reverse proxy
+- `retrotools-secrets` and `retrotools-migrate`: self-contained single-file CLIs for
+  servers without .NET
 
-> ⚠ Τα πακέτα EF Core είναι **καρφωμένα στο 9.0.x**. Το Pomelo δεν έχει build για EF Core 10·
-> αναβάθμιση θα σπάσει τον provider στο runtime. Δες [plan.md §2](plan.md).
+> ⚠ The EF Core packages are **pinned to 9.0.x**. Pomelo has no build for EF Core 10;
+> upgrading will break the provider at runtime. See [plan.md §2](plan.md).
 
 ---
 
 ## Quick start
 
-### Προαπαιτούμενα
+### Prerequisites
 
 - .NET SDK 10 ([download](https://dotnet.microsoft.com/download))
-- Πρόσβαση σε MariaDB 11 με μια αποκλειστική βάση για την εφαρμογή
+- Access to MariaDB 11 with a database dedicated to the application
 - Git
 
-### Εγκατάσταση
+### Install
 
 ```bash
 git clone <repo-url> retrotools
@@ -88,38 +101,40 @@ git clone <repo-url> retrotools
 cd retrotools && dotnet restore
 ```
 
-### Ρύθμιση σύνδεσης βάσης
+### Configuring the database connection
 
-Το connection string **δεν βρίσκεται ποτέ μέσα στο repository**. Δώσ' το με έναν από
-τους παρακάτω τρόπους (η σειρά προτεραιότητας είναι από κάτω προς τα πάνω):
+The connection string is **never inside the repository**. Supply it in one of the
+following ways (priority runs from bottom to top):
 
-**1. User secrets (συνιστάται για development)**
+**1. User secrets (recommended for development)**
 
 ```bash
 dotnet user-secrets set "ConnectionStrings:RetroTools" "Server=YOUR_HOST;Port=3306;Database=DB_NAME;User ID=YOUR_USER;Password=YOUR_PASSWORD;" --project src/RetroTools.Web
 ```
 
-**2. Environment variable (για deployment)**
+**2. Environment variable (for deployment)**
 
 ```bash
 export ConnectionStrings__RetroTools="Server=YOUR_HOST;Port=3306;Database=DB_NAME;User ID=YOUR_USER;Password=YOUR_PASSWORD;"
 ```
 
-**3. `appsettings.Local.json`** — αντίγραψε το `appsettings.Local.json.example`,
-συμπλήρωσε τις τιμές. Το αρχείο είναι στο `.gitignore`.
+**3. `appsettings.Local.json`** — copy `appsettings.Local.json.example` and fill in the
+values. The file is in `.gitignore`.
 
-Αν λείπει το connection string, η εφαρμογή σταματά στο startup με ρητό μήνυμα.
+If the connection string is missing, the application stops at startup with an explicit
+message.
 
-### Ρύθμιση σύνδεσης GitHub / Google (προαιρετικό στο development)
+### Configuring GitHub / Google sign-in (optional in development)
 
-Η εφαρμογή δεν έχει δικούς της κωδικούς — η σύνδεση γίνεται μόνο μέσω GitHub και Google.
+The application has no passwords of its own — sign-in happens only through GitHub and
+Google.
 
-**➜ [Αναλυτικές οδηγίες: docs/oauth-setup.md](docs/oauth-setup.md)** — βήμα-βήμα
-δημιουργία των OAuth applications, τα σωστά callback URL, πίνακας συχνών σφαλμάτων
-και τι σημαίνει το καθένα, και πώς ανανεώνεις κλειδί που διέρρευσε.
+**➜ [Full instructions: docs/oauth-setup.md](docs/oauth-setup.md)** — step-by-step
+creation of the OAuth applications, the correct callback URLs, a table of common errors
+and what each one means, and how to rotate a leaked key.
 
-Σύντομη έκδοση: τα callback URL είναι `/signin-github` και `/signin-google`, και τα
-κλειδιά αποθηκεύονται σε τέσσερα κλειδιά ρυθμίσεων:
+Short version: the callback URLs are `/signin-github` and `/signin-google`, and the keys
+live in four configuration keys:
 
 ```bash
 dotnet user-secrets set "Authentication:GitHub:ClientId" "YOUR_ID" --project src/RetroTools.Web
@@ -129,89 +144,89 @@ dotnet user-secrets set "Authentication:GitHub:ClientId" "YOUR_ID" --project src
 dotnet user-secrets set "Authentication:GitHub:ClientSecret" "YOUR_SECRET" --project src/RetroTools.Web
 ```
 
-Το ίδιο για `Authentication:Google:ClientId` / `:ClientSecret`.
-Αν λείπουν, ο αντίστοιχος provider απλώς δεν εμφανίζεται — η εφαρμογή σηκώνεται κανονικά.
+The same for `Authentication:Google:ClientId` / `:ClientSecret`.
+If they are missing, that provider simply does not appear — the application starts
+normally.
 
-#### Τοπική σύνδεση χωρίς OAuth
+#### Local sign-in without OAuth
 
-Για να δουλέψεις στο UI χωρίς να στήσεις OAuth apps, υπάρχει η διαδρομή
-`/account/dev/signin` που σε συνδέει ως τοπικό δοκιμαστικό χρήστη.
+To work on the UI without setting up OAuth applications, the route
+`/account/dev/signin` signs you in as a local test user.
 
-> ⚠️ **Απαιτεί διπλή ενεργοποίηση:** περιβάλλον `Development` **και**
-> `RetroTools:EnableDevSignIn = true` στο `appsettings.Development.json`
-> (που είναι gitignored). Αν λείπει οποιοδήποτε από τα δύο, η διαδρομή επιστρέφει
-> **404** σαν να μην υπάρχει. Μην ενεργοποιήσεις ποτέ αυτή τη ρύθμιση σε server.
+> ⚠️ **It requires two separate opt-ins:** the `Development` environment **and**
+> `RetroTools:EnableDevSignIn = true` in `appsettings.Development.json` (which is
+> gitignored). If either is missing, the route returns **404** as if it did not exist.
+> Never enable this setting on a server.
 
-### Ρύθμιση σε server χωρίς .NET SDK
+### Configuring a server without the .NET SDK
 
-Το `dotnet user-secrets` είναι εντολή του **SDK**. Σε διακομιστή παραγωγής το SDK
-συνήθως δεν υπάρχει — και ενδεχομένως ούτε το runtime, αν η εφαρμογή τρέχει
-self-contained. Γι' αυτό υπάρχει το `retrotools-secrets`.
+`dotnet user-secrets` is an **SDK** command. A production server usually has no SDK —
+and possibly not even the runtime, if the app is deployed self-contained. That is why
+`retrotools-secrets` exists.
 
-Δημοσίευσέ το ως **ένα αυτοτελές αρχείο** (δεν χρειάζεται τίποτα εγκατεστημένο στον server):
+Publish it as a **single self-contained file** (the server needs nothing installed):
 
 ```bash
 dotnet publish src/RetroTools.Secrets -c Release -r linux-x64 -o ./secrets-tool
 ```
 
-Για Windows βάλε `-r win-x64`. Αντέγραψε το ένα εκτελέσιμο στον server και:
+Use `-r win-x64` for Windows. Copy the single executable to the server and run:
 
 ```bash
 ./retrotools-secrets set "ConnectionStrings:RetroTools"
 ```
 
-Χωρίς τιμή στη γραμμή εντολών, τη διαβάζει από το stdin — **έτσι ο κωδικός δεν μένει
-στο ιστορικό του shell**.
+With no value on the command line it reads from stdin — **so the password never lands in
+your shell history**.
 
-| Εντολή | Τι κάνει |
+| Command | What it does |
 |---|---|
-| `path` | Πού βρίσκεται το αρχείο ρυθμίσεων |
-| `list` | Όλες οι ρυθμίσεις, με τις τιμές κρυμμένες (`--reveal` για ολόκληρες) |
-| `set <κλειδί> [τιμή]` | Ορισμός· χωρίς τιμή διαβάζει από stdin |
-| `remove <κλειδί>` / `clear --force` | Διαγραφή |
-| `import <αρχείο.json>` | Εισαγωγή από `appsettings.Local.json` — παραλείπει τα placeholders |
-| `export-env` | Γραμμές για systemd `EnvironmentFile` |
-| `check` | Λείπει υποχρεωτική ρύθμιση; Είναι μισο-ρυθμισμένος κάποιος OAuth provider; |
-| `test` | `check` **και πραγματική σύνδεση** στη MariaDB |
+| `path` | Where the settings file lives |
+| `list` | All settings, with values masked (`--reveal` for the full values) |
+| `set <key> [value]` | Set one; with no value, reads from stdin |
+| `remove <key>` / `clear --force` | Delete |
+| `import <file.json>` | Import from `appsettings.Local.json` — skips placeholders |
+| `export-env` | Lines for a systemd `EnvironmentFile` |
+| `check` | Is a required setting missing? Is an OAuth provider half-configured? |
+| `test` | `check` **plus a real connection** to MariaDB |
 
-Το `test` είναι το ουσιαστικό: το ότι υπάρχει connection string δεν σημαίνει ότι
-δουλεύει — λάθος κωδικός, κλειστό firewall ή λάθος όνομα βάσης φαίνονται μόνο έτσι.
+`test` is the one that matters: a present connection string proves nothing — a wrong
+password, a closed firewall or a wrong database name only show up this way.
 
-Κωδικοί εξόδου: `0` επιτυχία, `1` σφάλμα χρήσης, `2` λείπει ρύθμιση ή απέτυχε η
-σύνδεση — ώστε να μπαίνει σε script εγκατάστασης.
+Exit codes: `0` success, `1` usage error, `2` a setting is missing or the connection
+failed — so it fits into a provisioning script.
 
-Αν προτιμάς μεταβλητές περιβάλλοντος αντί για αρχείο:
+If you prefer environment variables over a file:
 
 ```bash
 ./retrotools-secrets export-env > /etc/retrotools.env && chmod 600 /etc/retrotools.env
 ```
 
-> Το εργαλείο γράφει **το ίδιο αρχείο** με το `dotnet user-secrets`, σε ίδια διαδρομή
-> και μορφή — τα δύο εργαλεία είναι εναλλάξιμα. Σε Linux περιορίζει τα δικαιώματα
-> του αρχείου σε `0600`.
+> The tool writes **the same file** as `dotnet user-secrets`, at the same path and in the
+> same format — the two are interchangeable. On Linux it restricts the file to `0600`.
 
-### Δημιουργία σχήματος
+### Creating the schema
 
-Με SDK:
+With the SDK:
 
 ```bash
 dotnet ef database update --project src/RetroTools.Data --startup-project src/RetroTools.Web
 ```
 
-**Χωρίς SDK** — με το `retrotools-migrate`, που δημοσιεύεται self-contained όπως και το
+**Without the SDK** — with `retrotools-migrate`, published self-contained just like
 `retrotools-secrets`:
 
 ```bash
 dotnet publish src/RetroTools.Migrator -c Release -r linux-x64 -o ./migrate-tool
 ```
 
-| Εντολή | Τι κάνει |
+| Command | What it does |
 |---|---|
-| `status` (προεπιλογή) | Τι εκκρεμεί. Exit `0` ενημερωμένη, `2` υπάρχουν εκκρεμή |
-| `list` | Όλα τα migrations, με σημάδι τα εφαρμοσμένα |
-| `up` | Εφαρμογή· ζητά επιβεβαίωση, `--yes` για scripts |
-| `up --create-database` | Δημιουργεί και τη βάση αν λείπει, με utf8mb4 |
-| `script --output x.sql` | Παράγει idempotent SQL αντί να το εκτελέσει |
+| `status` (default) | What is pending. Exit `0` up to date, `2` migrations pending |
+| `list` | Every migration, applied ones marked |
+| `up` | Apply; asks for confirmation, `--yes` for scripts |
+| `up --create-database` | Also creates the database if missing, with utf8mb4 |
+| `script --output x.sql` | Generates idempotent SQL instead of executing it |
 
 ```bash
 ./retrotools-migrate status
@@ -221,21 +236,21 @@ dotnet publish src/RetroTools.Migrator -c Release -r linux-x64 -o ./migrate-tool
 ./retrotools-migrate up
 ```
 
-Το εργαλείο **αρνείται** να προχωρήσει αν η βάση έχει migrations που δεν γνωρίζει το
-εκτελέσιμο — σημαίνει ότι η βάση είναι νεότερη από τον κώδικα, τυπικά λάθος έκδοση
-αρχείου ή μισοτελειωμένο rollback.
+The tool **refuses** to proceed if the database holds migrations this executable does
+not know about — that means the database is newer than the code, typically a wrong build
+or a half-finished rollback.
 
-Ξεχωρίζει επίσης τα τρία σενάρια αποτυχίας σύνδεσης, γιατί έχουν διαφορετική λύση:
-απρόσιτος διακομιστής, ανύπαρκτη βάση, ή βάση χωρίς δικαιώματα.
+It also distinguishes the three connection failures, because each has a different fix:
+unreachable server, missing database, or a database the user cannot access.
 
-> Οι αλλαγές σχήματος στη MariaDB **δεν είναι transactional**: αν κάτι αποτύχει στη
-> μέση, η βάση μένει μισοενημερωμένη. Πάρε `mysqldump` πρώτα. Το εργαλείο σου το
-> θυμίζει πριν εφαρμόσει.
+> Schema changes in MariaDB are **not transactional**: if something fails halfway, the
+> database is left half-updated. Take a `mysqldump` first. The tool reminds you before
+> it applies anything.
 >
-> Αν προτιμάς να μην έχει η εφαρμογή δικαιώματα DDL, χρησιμοποίησε
-> `script --output schema.sql` και δώσε το SQL στον διαχειριστή της βάσης.
+> If you would rather the application had no DDL rights, use
+> `script --output schema.sql` and hand the SQL to your database administrator.
 
-### Εκτέλεση
+### Run
 
 ```bash
 dotnet run --project src/RetroTools.Web
@@ -247,48 +262,47 @@ dotnet run --project src/RetroTools.Web
 dotnet test
 ```
 
-Τα integration tests που απαιτούν βάση γίνονται **skip** αυτόματα αν δεν υπάρχει
-connection string — δεν αποτυγχάνουν σε CI χωρίς secrets.
+Integration tests that need a database are **skipped** automatically when no connection
+string is configured — they do not fail on CI without secrets.
 
 ---
 
 ## Deployment
 
-Self-hosted ως service, πίσω από reverse proxy (nginx / Apache / IIS ARR / Caddy).
+Self-hosted as a service behind a reverse proxy (nginx / Apache / IIS ARR / Caddy).
 
-### Σειρά βημάτων στον server
+### Order of operations on the server
 
-1. **Δημοσίευσε την εφαρμογή** και το εργαλείο secrets:
+1. **Publish** the application and both tools:
    ```bash
    dotnet publish src/RetroTools.Web -c Release -r linux-x64 --self-contained -o ./publish
    ```
    ```bash
    dotnet publish src/RetroTools.Secrets -c Release -r linux-x64 -o ./publish
    ```
-2. **Ρύθμισε τα secrets** με το `retrotools-secrets` — δεν χρειάζεται .NET SDK στον server:
+2. **Configure the secrets** with `retrotools-secrets` — no SDK needed on the server:
    ```bash
    ./retrotools-secrets set "ConnectionStrings:RetroTools"
    ```
-3. **Επιβεβαίωσε πριν ξεκινήσεις την υπηρεσία**:
+3. **Verify before starting the service**:
    ```bash
    ./retrotools-secrets test
    ```
-   Επιστρέφει `0` μόνο αν όλες οι υποχρεωτικές ρυθμίσεις υπάρχουν **και** η βάση
-   απαντά — οπότε μπαίνει σε script εγκατάστασης ως προϋπόθεση.
-4. **Εφάρμοσε τα migrations** με το `retrotools-migrate` — ούτε αυτό θέλει SDK:
+   It returns `0` only if every required setting is present **and** the database
+   answers — so it works as a precondition in a provisioning script.
+4. **Apply the migrations** with `retrotools-migrate` — this needs no SDK either:
    ```bash
    ./retrotools-migrate status
    ```
    ```bash
    ./retrotools-migrate up
    ```
-5. **Στήσε την υπηρεσία** και τον reverse proxy με τις ρυθμίσεις του πίνακα.
+5. **Set up the service** and the reverse proxy using the settings in the table below.
 
-Τα δύο εργαλεία διαβάζουν τη ρύθμιση με **την ίδια σειρά προτεραιότητας**
-(`--connection` → μεταβλητή περιβάλλοντος → `--file` → user-secrets), οπότε ρυθμίζεις
-μια φορά και τα χρησιμοποιείς και τα δύο.
+Both tools read configuration in **the same priority order** (`--connection` →
+environment variable → `--file` → user-secrets), so you configure once and use both.
 
-Και τα δύο δίνουν **διακριτούς κωδικούς εξόδου**, ώστε να μπαίνουν σε script:
+Both also return **distinct exit codes**, so they chain in a script:
 
 ```bash
 ./retrotools-secrets test || exit 1
@@ -296,50 +310,51 @@ Self-hosted ως service, πίσω από reverse proxy (nginx / Apache / IIS AR
 ./retrotools-migrate up --yes
 ```
 
-### Ρυθμίσεις φιλοξενίας
+### Hosting settings
 
-Στο section `RetroTools` του `appsettings`:
+In the `RetroTools` section of `appsettings`:
 
-| Ρύθμιση | Τι κάνει |
+| Setting | What it does |
 |---|---|
-| `BehindReverseProxy` | Ενεργοποιεί το `X-Forwarded-*` processing (**απαραίτητο**, αλλιώς σπάει το OAuth callback) |
-| `KnownProxies` / `KnownNetworks` | Ποιους proxies εμπιστευόμαστε (IP ή CIDR). Χωρίς αυτούς τα headers αγνοούνται — είναι spoofable |
-| `TrustAnyProxy` | Παρακάμπτει τον παραπάνω έλεγχο. Μόνο αν η Kestrel δεν εκτίθεται |
-| `PathBase` | Φιλοξενία κάτω από sub-path, π.χ. `/spritestudio` |
-| `EnableHttpsRedirection` | Βάλ' το `false` όταν το TLS τερματίζει ο proxy |
+| `BehindReverseProxy` | Enables `X-Forwarded-*` processing (**required**, or the OAuth callback breaks) |
+| `KnownProxies` / `KnownNetworks` | Which proxies to trust (IP or CIDR). Without them the headers are ignored — they are spoofable |
+| `TrustAnyProxy` | Bypasses the check above. Only if Kestrel is not exposed |
+| `PathBase` | Hosting under a sub-path, e.g. `/spritestudio` |
+| `EnableHttpsRedirection` | Set it to `false` when the proxy terminates TLS |
 
-Το `UseWindowsService()` / `UseSystemd()` ενεργοποιούνται μόνα τους όταν η εφαρμογή τρέχει
-ως service· από κονσόλα είναι no-op.
+`UseWindowsService()` / `UseSystemd()` activate on their own when the application runs as
+a service; from a console they are no-ops.
 
-> Ο **Blazor Server χρειάζεται WebSockets**. Ο proxy πρέπει να επιτρέπει το upgrade
-> (`Upgrade` / `Connection` headers σε nginx), αλλιώς ο editor πέφτει σε long-polling.
+> **Blazor Server needs WebSockets.** The proxy must allow the upgrade (`Upgrade` /
+> `Connection` headers in nginx), otherwise the editor falls back to long-polling.
 
 ---
 
-## Δομή repository
+## Repository layout
 
 ```
 retrotools/
 ├─ src/
-│  ├─ RetroTools.Core/     # παλέτες, modes, codecs, PNG, export — καθαρό domain, χωρίς εξαρτήσεις
+│  ├─ RetroTools.Core/     # palettes, modes, codecs, PNG, export — pure domain, no dependencies
 │  ├─ RetroTools.Data/     # EF Core entities, DbContext, migrations
 │  ├─ RetroTools.Web/      # MVC controllers, REST API, Blazor editor, wwwroot
-│  ├─ RetroTools.Configuration/  # πού ζουν τα secrets — κοινό για τα εργαλεία
-│  ├─ RetroTools.Secrets/  # CLI ρύθμισης secrets, για server χωρίς SDK
-│  └─ RetroTools.Migrator/ # CLI εφαρμογής migrations, για server χωρίς SDK
+│  ├─ RetroTools.Configuration/  # where secrets live — shared by the tools
+│  ├─ RetroTools.Secrets/  # secrets CLI, for servers without the SDK
+│  └─ RetroTools.Migrator/ # migrations CLI, for servers without the SDK
 ├─ tests/
 ├─ docs/
-│  └─ oauth-setup.md       # δημιουργία κλειδιών GitHub / Google
-├─ plan.md                 # τεχνική μελέτη + roadmap
+│  ├─ manual.md            # user manual
+│  └─ oauth-setup.md       # creating the GitHub / Google keys
+├─ plan.md                 # technical study + roadmap
 └─ README.md
 ```
 
 ---
 
-## Ασφάλεια & credentials
+## Security & credentials
 
-Στο repository **δεν μπαίνουν ποτέ**: connection strings, hostnames βάσης, usernames,
-passwords. Τα `.gitignore` entries που το εγγυώνται:
+The repository **never contains**: connection strings, database hostnames, usernames or
+passwords. The `.gitignore` entries that guarantee it:
 
 ```
 appsettings.Local.json
@@ -350,40 +365,41 @@ appsettings.Development.json
 secrets/
 ```
 
-Αν χρειαστεί να προστεθεί νέα ρύθμιση με μυστικό, πηγαίνει σε user-secrets ή env var —
-ποτέ σε committed αρχείο. Τα committed `*.example` αρχεία περιέχουν **μόνο placeholders**.
+If a new setting with a secret is needed, it goes into user-secrets or an environment
+variable — never into a committed file. The committed `*.example` files contain
+**placeholders only**.
 
-### Διαχείριση των secrets
+### Managing the secrets
 
-| Περιβάλλον | Τρόπος |
+| Environment | How |
 |---|---|
-| Development με SDK | `dotnet user-secrets set …` |
-| Server **χωρίς SDK** | `retrotools-secrets set …` — [οδηγίες](#ρύθμιση-σε-server-χωρίς-net-sdk) |
-| Container / systemd | Μεταβλητές περιβάλλοντος· `retrotools-secrets export-env` τις παράγει |
+| Development with the SDK | `dotnet user-secrets set …` |
+| Server **without the SDK** | `retrotools-secrets set …` — [instructions](#configuring-a-server-without-the-net-sdk) |
+| Container / systemd | Environment variables; `retrotools-secrets export-env` generates them |
 
-Και τα δύο εργαλεία γράφουν **το ίδιο αρχείο**, σε ίδια διαδρομή και μορφή, οπότε
-είναι εναλλάξιμα.
+Both tools write **the same file**, at the same path and in the same format, so they are
+interchangeable.
 
-> Να ξέρεις ότι **ο user-secrets store δεν είναι κρυπτογραφημένος** — ούτε από το SDK.
-> Η προστασία είναι ότι το αρχείο ζει έξω από τον φάκελο του project (άρα δεν μπαίνει
-> σε git) και ότι τα δικαιώματά του περιορίζονται στον ιδιοκτήτη. Το `retrotools-secrets`
-> επιβάλλει `0600` σε Unix· χωρίς αυτό το αρχείο είναι αναγνώσιμο από κάθε λογαριασμό
-> του μηχανήματος. Αν χρειάζεσαι πραγματική κρυπτογράφηση σε ηρεμία, χρησιμοποίησε
-> κάτι σαν Vault ή τα secrets του λειτουργικού και πέρασέ τα ως μεταβλητές περιβάλλοντος.
+> Be aware that **the user-secrets store is not encrypted** — not by the SDK either. The
+> protection is that the file lives outside the project folder (so it never enters git)
+> and that its permissions are restricted to the owner. `retrotools-secrets` enforces
+> `0600` on Unix; without that the file is readable by every account on the machine. If
+> you need real encryption at rest, use something like Vault or your OS secret store and
+> pass the values in as environment variables.
 
 ---
 
 ## Roadmap
 
-Φάσεις M0 → M8, αναλυτικά στο [plan.md §10](plan.md). Συνοπτικά:
+Phases M0 → M8, in detail in [plan.md §10](plan.md). In short:
 setup → platform catalog → codecs → data layer → CRUD/API → pixel editor →
-spritemaps → export/import → polish (auth, animation, SpritePad συμβατότητα).
+spritemaps → export/import → polish.
 
-## Συνεισφορά
+## Contributing
 
-Ο κώδικας γράφεται σε **C# 10** — δεν επιτρέπονται features νεότερων εκδόσεων
-(raw string literals, `required` members, primary constructors, collection expressions).
+The code is written in **C# 10** — features from newer versions are not allowed (raw
+string literals, `required` members, primary constructors, collection expressions).
 
-## Άδεια
+## Licence
 
 TBD.
