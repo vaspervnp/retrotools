@@ -35,9 +35,10 @@ Web εργαλείο σχεδίασης **sprites** και **spritemaps** για
   spritemaps) σε ένα αρχείο `.retrotools.json` που μπαίνει σε git δίπλα στον κώδικα
   του παιχνιδιού και ξαναφορτώνεται όποτε θες.
 - **Multi-user** με σύνδεση GitHub / Google· κάθε project ανήκει στον χρήστη του.
-- **`retrotools-secrets`**: εργαλείο γραμμής εντολών που ρυθμίζει τα secrets σε server
-  **χωρίς εγκατεστημένο .NET** — ένα αυτοτελές εκτελέσιμο που δοκιμάζει και την
-  πραγματική σύνδεση στη βάση. Δες [Ρύθμιση σε server χωρίς .NET SDK](#ρύθμιση-σε-server-χωρίς-net-sdk).
+- **Δύο εργαλεία για server χωρίς εγκατεστημένο .NET**, ως αυτοτελή εκτελέσιμα:
+  [`retrotools-secrets`](#ρύθμιση-σε-server-χωρίς-net-sdk) για τις ρυθμίσεις (δοκιμάζει
+  και την πραγματική σύνδεση) και [`retrotools-migrate`](#δημιουργία-σχήματος) για τα
+  migrations. Και τα δύο αντικαθιστούν εντολές του SDK που δεν υπάρχει στην παραγωγή.
 
 ## Υποστηριζόμενες πλατφόρμες — περίληψη
 
@@ -111,12 +112,14 @@ export ConnectionStrings__RetroTools="Server=YOUR_HOST;Port=3306;Database=DB_NAM
 
 ### Ρύθμιση σύνδεσης GitHub / Google (προαιρετικό στο development)
 
-Δημιούργησε δύο OAuth applications και δώσε τα κλειδιά με user-secrets:
+Η εφαρμογή δεν έχει δικούς της κωδικούς — η σύνδεση γίνεται μόνο μέσω GitHub και Google.
 
-- **GitHub** — Settings → Developer settings → OAuth Apps → New OAuth App.
-  Authorization callback URL: `https://localhost:7xxx/signin-github`
-- **Google** — Google Cloud Console → APIs & Services → Credentials → OAuth client ID (Web application).
-  Authorized redirect URI: `https://localhost:7xxx/signin-google`
+**➜ [Αναλυτικές οδηγίες: docs/oauth-setup.md](docs/oauth-setup.md)** — βήμα-βήμα
+δημιουργία των OAuth applications, τα σωστά callback URL, πίνακας συχνών σφαλμάτων
+και τι σημαίνει το καθένα, και πώς ανανεώνεις κλειδί που διέρρευσε.
+
+Σύντομη έκδοση: τα callback URL είναι `/signin-github` και `/signin-google`, και τα
+κλειδιά αποθηκεύονται σε τέσσερα κλειδιά ρυθμίσεων:
 
 ```bash
 dotnet user-secrets set "Authentication:GitHub:ClientId" "YOUR_ID" --project src/RetroTools.Web
@@ -189,9 +192,48 @@ dotnet publish src/RetroTools.Secrets -c Release -r linux-x64 -o ./secrets-tool
 
 ### Δημιουργία σχήματος
 
+Με SDK:
+
 ```bash
 dotnet ef database update --project src/RetroTools.Data --startup-project src/RetroTools.Web
 ```
+
+**Χωρίς SDK** — με το `retrotools-migrate`, που δημοσιεύεται self-contained όπως και το
+`retrotools-secrets`:
+
+```bash
+dotnet publish src/RetroTools.Migrator -c Release -r linux-x64 -o ./migrate-tool
+```
+
+| Εντολή | Τι κάνει |
+|---|---|
+| `status` (προεπιλογή) | Τι εκκρεμεί. Exit `0` ενημερωμένη, `2` υπάρχουν εκκρεμή |
+| `list` | Όλα τα migrations, με σημάδι τα εφαρμοσμένα |
+| `up` | Εφαρμογή· ζητά επιβεβαίωση, `--yes` για scripts |
+| `up --create-database` | Δημιουργεί και τη βάση αν λείπει, με utf8mb4 |
+| `script --output x.sql` | Παράγει idempotent SQL αντί να το εκτελέσει |
+
+```bash
+./retrotools-migrate status
+```
+
+```bash
+./retrotools-migrate up
+```
+
+Το εργαλείο **αρνείται** να προχωρήσει αν η βάση έχει migrations που δεν γνωρίζει το
+εκτελέσιμο — σημαίνει ότι η βάση είναι νεότερη από τον κώδικα, τυπικά λάθος έκδοση
+αρχείου ή μισοτελειωμένο rollback.
+
+Ξεχωρίζει επίσης τα τρία σενάρια αποτυχίας σύνδεσης, γιατί έχουν διαφορετική λύση:
+απρόσιτος διακομιστής, ανύπαρκτη βάση, ή βάση χωρίς δικαιώματα.
+
+> Οι αλλαγές σχήματος στη MariaDB **δεν είναι transactional**: αν κάτι αποτύχει στη
+> μέση, η βάση μένει μισοενημερωμένη. Πάρε `mysqldump` πρώτα. Το εργαλείο σου το
+> θυμίζει πριν εφαρμόσει.
+>
+> Αν προτιμάς να μην έχει η εφαρμογή δικαιώματα DDL, χρησιμοποίησε
+> `script --output schema.sql` και δώσε το SQL στον διαχειριστή της βάσης.
 
 ### Εκτέλεση
 
@@ -233,12 +275,26 @@ Self-hosted ως service, πίσω από reverse proxy (nginx / Apache / IIS AR
    ```
    Επιστρέφει `0` μόνο αν όλες οι υποχρεωτικές ρυθμίσεις υπάρχουν **και** η βάση
    απαντά — οπότε μπαίνει σε script εγκατάστασης ως προϋπόθεση.
-4. **Εφάρμοσε τα migrations** από μηχάνημα που έχει SDK (δες παρακάτω).
+4. **Εφάρμοσε τα migrations** με το `retrotools-migrate` — ούτε αυτό θέλει SDK:
+   ```bash
+   ./retrotools-migrate status
+   ```
+   ```bash
+   ./retrotools-migrate up
+   ```
 5. **Στήσε την υπηρεσία** και τον reverse proxy με τις ρυθμίσεις του πίνακα.
 
-> Τα migrations θέλουν `dotnet ef`, δηλαδή SDK. Τρέξ' τα από τον υπολογιστή ανάπτυξης
-> στοχεύοντας τη βάση παραγωγής, ή παρήγαγε script με
-> `dotnet ef migrations script --idempotent` και δώσ' το στον διαχειριστή της βάσης.
+Τα δύο εργαλεία διαβάζουν τη ρύθμιση με **την ίδια σειρά προτεραιότητας**
+(`--connection` → μεταβλητή περιβάλλοντος → `--file` → user-secrets), οπότε ρυθμίζεις
+μια φορά και τα χρησιμοποιείς και τα δύο.
+
+Και τα δύο δίνουν **διακριτούς κωδικούς εξόδου**, ώστε να μπαίνουν σε script:
+
+```bash
+./retrotools-secrets test || exit 1
+./retrotools-migrate status; [ $? -le 2 ] || exit 1
+./retrotools-migrate up --yes
+```
 
 ### Ρυθμίσεις φιλοξενίας
 
@@ -268,8 +324,12 @@ retrotools/
 │  ├─ RetroTools.Core/     # παλέτες, modes, codecs, PNG, export — καθαρό domain, χωρίς εξαρτήσεις
 │  ├─ RetroTools.Data/     # EF Core entities, DbContext, migrations
 │  ├─ RetroTools.Web/      # MVC controllers, REST API, Blazor editor, wwwroot
-│  └─ RetroTools.Secrets/  # CLI ρύθμισης secrets για server χωρίς SDK
+│  ├─ RetroTools.Configuration/  # πού ζουν τα secrets — κοινό για τα εργαλεία
+│  ├─ RetroTools.Secrets/  # CLI ρύθμισης secrets, για server χωρίς SDK
+│  └─ RetroTools.Migrator/ # CLI εφαρμογής migrations, για server χωρίς SDK
 ├─ tests/
+├─ docs/
+│  └─ oauth-setup.md       # δημιουργία κλειδιών GitHub / Google
 ├─ plan.md                 # τεχνική μελέτη + roadmap
 └─ README.md
 ```
