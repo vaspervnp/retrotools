@@ -57,7 +57,9 @@ retrotools/
 │  ├─ RetroTools.Core/          # Domain: παλέτες, modes, codecs, validation. Χωρίς εξαρτήσεις.
 │  ├─ RetroTools.Data/          # EF Core: entities, DbContext, migrations, repositories
 │  ├─ RetroTools.Web/           # MVC controllers + Views + Blazor components + wwwroot
-│  └─ RetroTools.Secrets/       # CLI ρύθμισης secrets, self-contained για server χωρίς SDK
+│  ├─ RetroTools.Configuration/ # πού ζουν τα secrets — κοινό, ώστε τα εργαλεία να συμφωνούν
+│  ├─ RetroTools.Secrets/       # CLI ρύθμισης secrets, self-contained για server χωρίς SDK
+│  └─ RetroTools.Migrator/      # CLI εφαρμογής migrations, self-contained
 ├─ tests/
 │  ├─ RetroTools.Core.Tests/
 │  └─ RetroTools.Data.Tests/    # integration tests με MariaDB
@@ -82,6 +84,14 @@ Self-hosted **ως service**, σε Windows ή Linux, πίσω από reverse pro
   - υποστηρίζει `PathBase` για φιλοξενία κάτω από sub-path (π.χ. `/spritestudio`),
   - απενεργοποιεί το εσωτερικό HTTPS redirect (`EnableHttpsRedirection: false`) αφού το κάνει ο proxy.
 - **Κρίσιμο για OAuth:** χωρίς σωστά forwarded headers τα redirect URIs βγαίνουν `http://` και τα GitHub/Google callbacks αποτυγχάνουν.
+- **Migrations χωρίς SDK:** το `dotnet ef` χρειάζεται SDK, αλλά μόνο για να *δημιουργήσει*
+  migrations. Για να τα *εφαρμόσει* αρκεί το EF Core runtime, οπότε το `RetroTools.Migrator`
+  τα κουβαλά μέσα του και δημοσιεύεται self-contained. Αρνείται να προχωρήσει αν η βάση
+  έχει migrations που δεν γνωρίζει — σημάδι ότι η βάση είναι νεότερη από τον κώδικα.
+  Ξεχωρίζει απρόσιτο διακομιστή από ανύπαρκτη βάση από βάση χωρίς δικαιώματα, γιατί οι
+  τρεις καταστάσεις έχουν διαφορετική λύση και ένα σκέτο «δεν συνδέομαι» δεν βοηθά.
+  Η δημιουργία βάσης απαιτεί ρητό `--create-database`: ένα τυπογραφικό στο όνομα δεν
+  πρέπει να φτιάχνει σιωπηλά μια άδεια βάση όπου όλα «δουλεύουν».
 - **WebSockets:** ο Blazor Server χρειάζεται WebSocket upgrade στον proxy (`proxy_set_header Upgrade/Connection` σε nginx), αλλιώς πέφτει σε long-polling με αισθητό latency στον editor.
 - **Data Protection keys:** πρέπει να επιμένουν σε δίσκο (ή στη βάση), αλλιώς κάθε restart ακυρώνει τα auth cookies.
 - Έτοιμα δείγματα (systemd unit, nginx site, Windows service) θα μπουν στο `docs/deploy/`.

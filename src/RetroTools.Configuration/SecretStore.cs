@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace RetroTools.Secrets;
+namespace RetroTools.Configuration;
 
 /// <summary>
 /// Διαβάζει και γράφει τον ίδιο αποθηκευτικό χώρο με το <c>dotnet user-secrets</c>,

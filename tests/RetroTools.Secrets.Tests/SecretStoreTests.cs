@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
-namespace RetroTools.Secrets.Tests;
+namespace RetroTools.Configuration.Tests;
 
 public class SecretStoreTests : IDisposable
 {

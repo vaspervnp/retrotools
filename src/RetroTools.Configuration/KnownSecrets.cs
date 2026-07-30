@@ -1,4 +1,4 @@
-namespace RetroTools.Secrets;
+namespace RetroTools.Configuration;
 
 /// <summary>Μια ρύθμιση που περιμένει η εφαρμογή.</summary>
 public sealed record KnownSecret(string Key, string Description, bool Required, string? Group = null);

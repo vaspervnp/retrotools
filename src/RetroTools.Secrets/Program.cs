@@ -1,5 +1,5 @@
 using MySqlConnector;
-using RetroTools.Secrets;
+using RetroTools.Configuration;
 
 // Εργαλείο ρύθμισης secrets που δεν χρειάζεται .NET SDK.
 //

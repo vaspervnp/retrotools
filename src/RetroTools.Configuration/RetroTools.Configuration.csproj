@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>RetroTools.Configuration</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Καμία εξάρτηση επίτηδες: και τα δύο εργαλεία δημοσιεύονται self-contained
+       και δεν χρειάζεται να κουβαλήσουν τίποτα παραπάνω για να διαβάσουν ένα JSON. -->
+
+</Project>
